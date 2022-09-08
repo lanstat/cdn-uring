@@ -1,0 +1,9 @@
+cdn: main.cpp
+		g++ -o $@ $< -luring
+
+all: cdn
+
+.PHONY: clean
+
+clean:
+	rm -f regular_cat cat_uring cat_liburing cp_liburing webserver_liburing
