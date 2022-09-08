@@ -41,7 +41,8 @@ struct Request *Server::HandleRead(struct Request *request) {
    Utils::StrToLower(method);
    path = strtok_r(NULL, " ", &saveptr);
 
-   auto response = Utils::CreateRequest();
+   auto response = Utils::CreateRequest(3);
+   response->iovec_count = 3;
    response->iov[0].iov_base = path;
    response->iov[0].iov_len = strlen(path);
 
@@ -49,7 +50,6 @@ struct Request *Server::HandleRead(struct Request *request) {
    response->iov[1].iov_len = strlen(method);
 
    response->client_socket = request->client_socket;
-   response->iovec_count = 2;
 
    free(request->iov[0].iov_base);
    return response;
@@ -104,7 +104,7 @@ void Server::AddWriteRequest(struct Request *req) {
 }
 
 int Server::HandleWrite(struct Request *request) {
-   for (int i = 0; i < request->iovec_count; i++) {
+   for (int i = 2; i < request->iovec_count; i++) {
       free(request->iov[i].iov_base);
    }
 }

@@ -4,20 +4,6 @@
 
 #define READ_SZ 8192
 
-/*
- * Helper function for cleaner looking code.
- * */
-/*
-void *Engine::ZhMalloc(size_t size) {
-   void *buf = malloc(size);
-   if (!buf) {
-      fprintf(stderr, "Fatal error: unable to allocate memory.\n");
-      exit(1);
-   }
-   return buf;
-}
-*/
-
 Engine::Engine() {
    dns_ = new Dns();
    server_ = new Server();
@@ -127,26 +113,27 @@ void Engine::Run() {
             cache_->AddExistsRequest(data);
             free(request);
             break;
+         case EVENT_TYPE_SERVER_WRITE:
+            server_->HandleWrite(request);
+            close(request->client_socket);
+            free(request);
+            std::cout<< "LAN_[" << __FILE__ << ":" << __LINE__ << "] "<< "close socket" << std::endl;
+            break;
          case EVENT_TYPE_CACHE_EXISTS:
-            int cache_exists = cache_->HandleExists(request);
-            if (cache_exists == 0) {
+            if (cache_->HandleExists(request) == 0) {
                cache_->AddReadRequest(request);
             } else {
                dns_->AddFetchAAAARequest(request);
             }
             break;
+         case EVENT_TYPE_CACHE_READ:
+            cache_->HandleRead(request);
+            server_->AddWriteRequest(request);
+            break;
             /*
-            case EVENT_TYPE_CACHE_READ:
-               cache_->HandleRead(req);
-               server_->AddWriteRequest(req);
-               break;
             case EVENT_TYPE_CACHE_VERIFY:
                cache_->HandleVerify();
                cache_->AddVerifyRequest();
-               break;
-            case EVENT_TYPE_SERVER_WRITE:
-               server_->HandleWrite(req);
-               close(req->client_socket);
                break;
             case EVENT_TYPE_HTTP_FETCH:
                http_->HandleFetchData(req);

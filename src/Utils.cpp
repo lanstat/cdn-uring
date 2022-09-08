@@ -19,7 +19,7 @@ void *Utils::ZhMalloc(size_t size) {
    return buf;
 }
 
-struct Request *Utils::CreateRequest() {
-   struct Request *req = (Request *)malloc(sizeof(*req) + sizeof(struct iovec));
+struct Request *Utils::CreateRequest(int iovec_count) {
+   struct Request *req = (Request *)malloc(sizeof(*req) + sizeof(struct iovec) * iovec_count);
    return req;
 }

@@ -36,6 +36,8 @@ void Cache::AddExistsRequest(struct Request *request) {
                        (struct statx *)request->iov[2].iov_base);
    io_uring_sqe_set_data(sqe, request);
    io_uring_submit(ring_);
+
+   //delete path;
 }
 
 int Cache::HandleExists(struct Request *request) {
@@ -48,8 +50,27 @@ int Cache::HandleExists(struct Request *request) {
 void Cache::AddReadRequest(struct Request *request) {
    struct statx *stx = (struct statx *)request->iov[2].iov_base;
    free(request->iov[2].iov_base);
+   char *path = GetUID((char *)request->iov[0].iov_base);
 
+   int fd = open(path, O_RDONLY);
 
+   if (fd < 0) {
+      std::cout<< "LAN_[" << __FILE__ << ":" << __LINE__ << "] "<< "asdasd" << std::endl;
+      exit(1);
+   }
+   std::cout<< "LAN_[" << __FILE__ << ":" << __LINE__ << "] "<< stx->stx_size << std::endl;
+   struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
+   request->iov[2].iov_base = malloc(stx->stx_size);
+   request->iov[2].iov_len = stx->stx_size;
+   request->event_type = EVENT_TYPE_CACHE_READ;
+   memset(request->iov[2].iov_base, 0, stx->stx_size);
+
+   /* Linux kernel 5.5 has support for readv, but not for recv() or read() */
+   io_uring_prep_readv(sqe, fd, &request->iov[2], 1, 0);
+   io_uring_sqe_set_data(sqe, request);
+   io_uring_submit(ring_);
 }
 
-int Cache::HandleRead(struct Request *request) {}
+int Cache::HandleRead(struct Request *request) {
+   return 0;
+}
