@@ -9,10 +9,11 @@
 
 #define READ_SZ 8192
 
-const char *http_404_content =
-    "HTTP/1.0 404 Not Found\r\n"
-    "Content-type: text/html\r\n"
-    "\r\n";
+const char *http_405_content =
+    "HTTP/1.0 405 Method Not Allowed\r\n"
+    "Content-type: text/plain\r\n"
+    "\r\n"
+    "Method Not Allowed \r\n";
 
 Server::Server() { ring_ = nullptr; }
 
@@ -62,26 +63,21 @@ bool Server::HandleRead(struct Request *request,
 void Server::AddHttpErrorRequest(struct Request *req, int status_code) {
    struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
    req->event_type = EVENT_TYPE_SERVER_WRITE;
-   // io_uring_prep_writev(sqe, req->client_socket, req->iov, req->iovec_count,
-   // 0);
+
+   const char *data;
+
+   if (status_code == 405) {
+      data = http_405_content;
+   }
+
+   unsigned long slen = strlen(data);
+   req->iov[2].iov_base = Utils::ZhMalloc(slen);
+   req->iov[2].iov_len = slen;
+   memcpy(req->iov[2].iov_base, data, slen);
    io_uring_prep_write(sqe, req->client_socket, req->iov[2].iov_base,
                        req->iov[2].iov_len, 0);
    io_uring_sqe_set_data(sqe, req);
    io_uring_submit(ring_);
-}
-
-void Server::HandleHttpMethod(char *method_buffer, int client_socket) {
-   char *method, *path, *saveptr;
-
-   method = strtok_r(method_buffer, " ", &saveptr);
-   Utils::StrToLower(method);
-   path = strtok_r(NULL, " ", &saveptr);
-
-   // if (strcmp(method, "get") == 0) {
-   // HandleGetMethod(path, client_socket);
-   //} else {
-   // HandleUnimplementedMethod(client_socket);
-   //}
 }
 
 int Server::GetLine(const char *src, char *dest, int dest_sz) {
@@ -94,21 +90,6 @@ int Server::GetLine(const char *src, char *dest, int dest_sz) {
    return 1;
 }
 
-void Server::HandleUnimplementedMethod(int client_socket) {
-   // SendStaticStringContent(unimplemented_content, client_socket);
-}
-
-void Server::SendStaticStringContent(const char *str, int client_socket) {
-   struct Request *req =
-       (Request *)Utils::ZhMalloc(sizeof(*req) + sizeof(struct iovec));
-   unsigned long slen = strlen(str);
-   req->iovec_count = 1;
-   req->client_socket = client_socket;
-   req->iov[0].iov_base = Utils::ZhMalloc(slen);
-   req->iov[0].iov_len = slen;
-   memcpy(req->iov[0].iov_base, str, slen);
-}
-
 void Server::AddWriteRequest(struct Request *req) {
    struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
    req->event_type = EVENT_TYPE_SERVER_WRITE;
@@ -118,7 +99,7 @@ void Server::AddWriteRequest(struct Request *req) {
    io_uring_submit(ring_);
 }
 
-int Server::HandleWrite(struct Request *request) {
+void Server::HandleWrite(struct Request *request) {
    close(request->client_socket);
    Utils::ReleaseRequest(request);
 }

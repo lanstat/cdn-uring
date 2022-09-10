@@ -3,7 +3,7 @@
 #include "EventType.hpp"
 #include "Md5.hpp"
 
-#define INVALID_FILE 13816973012072644543
+#define INVALID_FILE 13816973012072644543ULL
 
 std::string PATH = "/home/lanstat/projects/confiared/my-cdn/cache/";
 
@@ -40,8 +40,6 @@ void Cache::AddExistsRequest(struct Request *request) {
                        (struct statx *)request->iov[2].iov_base);
    io_uring_sqe_set_data(sqe, request);
    io_uring_submit(ring_);
-
-   // delete path;
 }
 
 int Cache::HandleExists(struct Request *request) {
@@ -60,7 +58,7 @@ void Cache::AddReadRequest(struct Request *request) {
 
    if (fd < 0) {
       std::cout << "LAN_[" << __FILE__ << ":" << __LINE__ << "] "
-                << "asdasd" << std::endl;
+                << "wrong file " << path << std::endl;
       exit(1);
    }
    struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);

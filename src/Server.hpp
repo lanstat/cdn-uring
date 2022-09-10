@@ -18,14 +18,11 @@ class Server {
    bool HandleRead(struct Request *request, struct Request *inner_request);
 
    void AddWriteRequest(struct Request *request);
-   int HandleWrite(struct Request *request);
+   void HandleWrite(struct Request *request);
 
   private:
    struct io_uring *ring_;
 
-   void HandleHttpMethod(char *method_buffer, int client_socket);
    int GetLine(const char *src, char *dest, int dest_sz);
-   void SendStaticStringContent(const char *str, int client_socket);
-   void HandleUnimplementedMethod(int client_socket);
 };
 #endif

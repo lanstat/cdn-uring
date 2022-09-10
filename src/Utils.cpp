@@ -27,7 +27,9 @@ struct Request *Utils::CreateRequest(int iovec_count) {
 
 void Utils::ReleaseRequest(struct Request *request) {
    for (int i = 0; i < request->iovec_count; i++) {
-      free(request->iov[i].iov_base);
+      if (request->iov[i].iov_len > 0) {
+         free(request->iov[i].iov_base);
+      }
    }
    free(request);
 }

@@ -112,8 +112,8 @@ void Engine::Run() {
          case EVENT_TYPE_SERVER_READ: {
             auto inner_request = Utils::CreateRequest(4);
 
-            bool should_continue = server_->HandleRead(request, inner_request);
-            if (should_continue) {
+            bool is_method_valid = server_->HandleRead(request, inner_request);
+            if (is_method_valid) {
                cache_->AddExistsRequest(inner_request);
             } else {
                server_->AddHttpErrorRequest(inner_request, 405);
