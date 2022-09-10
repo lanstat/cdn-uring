@@ -24,6 +24,6 @@ class Cache {
 
   private:
    struct io_uring *ring_;
-   char *GetUID(char *url);
+   std::string GetUID(char *url);
 };
 #endif

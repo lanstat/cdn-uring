@@ -13,5 +13,6 @@ class Utils {
    static void *ZhMalloc(size_t size);
    static void StrToLower(char *str);
    static struct Request *CreateRequest(int iovec_count);
+   static void ReleaseRequest(struct Request *request);
 };
 #endif

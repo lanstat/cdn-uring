@@ -1,6 +1,7 @@
 #include "Engine.hpp"
 
 #include "EventType.hpp"
+#include "Utils.hpp"
 
 #define READ_SZ 8192
 
@@ -71,6 +72,7 @@ int Engine::AddAcceptRequest(int server_socket, struct sockaddr_in *client_addr,
                         client_addr_len, 0);
    struct Request *req = (Request *)malloc(sizeof(*req));
    req->event_type = EVENT_TYPE_ACCEPT;
+   req->iovec_count = 0;
    io_uring_sqe_set_data(sqe, req);
    io_uring_submit(&ring_);
 
@@ -81,8 +83,6 @@ void Engine::Run() {
    struct io_uring_cqe *cqe;
    struct sockaddr_in client_addr;
    socklen_t client_addr_len = sizeof(client_addr);
-   struct Request *data;
-
    server_->SetRing(&ring_);
    dns_->SetRing(&ring_);
    cache_->SetRing(&ring_);
@@ -104,20 +104,25 @@ void Engine::Run() {
 
       switch (request->event_type) {
          case EVENT_TYPE_ACCEPT:
+            Utils::ReleaseRequest(request);
+
             AddAcceptRequest(socket_, &client_addr, &client_addr_len);
             server_->AddReadRequest(cqe->res);
-            free(request);
             break;
-         case EVENT_TYPE_SERVER_READ:
-            data = server_->HandleRead(request);
-            cache_->AddExistsRequest(data);
-            free(request);
-            break;
+         case EVENT_TYPE_SERVER_READ: {
+            auto inner_request = Utils::CreateRequest(4);
+
+            bool should_continue = server_->HandleRead(request, inner_request);
+            if (should_continue) {
+               cache_->AddExistsRequest(inner_request);
+            } else {
+               server_->AddHttpErrorRequest(inner_request, 405);
+            }
+         } break;
          case EVENT_TYPE_SERVER_WRITE:
             server_->HandleWrite(request);
-            close(request->client_socket);
-            free(request);
-            std::cout<< "LAN_[" << __FILE__ << ":" << __LINE__ << "] "<< "close socket" << std::endl;
+            std::cout << "LAN_[" << __FILE__ << ":" << __LINE__ << "] "
+                      << "close socket" << std::endl;
             break;
          case EVENT_TYPE_CACHE_EXISTS:
             if (cache_->HandleExists(request) == 0) {

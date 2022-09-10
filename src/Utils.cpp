@@ -21,5 +21,13 @@ void *Utils::ZhMalloc(size_t size) {
 
 struct Request *Utils::CreateRequest(int iovec_count) {
    struct Request *req = (Request *)malloc(sizeof(*req) + sizeof(struct iovec) * iovec_count);
+   req->iovec_count = iovec_count;
    return req;
+}
+
+void Utils::ReleaseRequest(struct Request *request) {
+   for (int i = 0; i < request->iovec_count; i++) {
+      free(request->iov[i].iov_base);
+   }
+   free(request);
 }
