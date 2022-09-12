@@ -22,6 +22,9 @@ class Cache {
    void AddReadRequest(struct Request *request);
    int HandleRead(struct Request *request);
 
+   void AddWriteRequest(struct Request *request);
+   int HandleWrite(struct Request *request);
+
   private:
    struct io_uring *ring_;
    std::string GetUID(char *url);

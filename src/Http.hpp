@@ -9,15 +9,16 @@
 #include "Request.hpp"
 
 class Http {
- public:
-  Http();
+  public:
+   Http();
 
-  void SetRing(struct io_uring *ring);
+   void SetRing(struct io_uring *ring);
 
-  void AddFetchDataRequest(struct Request *req);
-  int HandleFetchData(struct Request *request);
+   void AddFetchDataRequest(struct Request *req);
+   int HandleFetchData(struct Request *request);
 
- private:
-  struct io_uring *ring_;
+  private:
+   struct io_uring *ring_;
+   void Fetch(struct Request *request);
 };
 #endif

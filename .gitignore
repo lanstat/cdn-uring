@@ -35,5 +35,7 @@
 *.out
 *.app
 
+cache/
+
 # End of https://www.toptal.com/developers/gitignore/api/c++
 

@@ -286,8 +286,8 @@ void DnsSeeker::parseEvent(const int &event, int socket) {
                 }
                 if (httpInProgress > 0) httpInProgress--;
 
-                const std::vector<int> &http = q.http;
-                const std::vector<int> &https = q.https;
+                const std::vector<void *> &http = q.http;
+                const std::vector<void *> &https = q.https;
                 // std::string hostcpp(std::string hostcpp(q.host));-> not
                 // needed
                 if (!http.empty() || !https.empty()) {
@@ -311,12 +311,12 @@ void DnsSeeker::parseEvent(const int &event, int socket) {
                                     if (!https.empty()) {
                                         memcpy(&targetHttps.sin6_addr,
                                                &entry.sin6_addr, 16);
-                                        dnsRight(targetHttps, true);
+                                        dnsRight(https, targetHttps);
                                     }
                                     if (!http.empty()) {
                                         memcpy(&targetHttp.sin6_addr,
                                                &entry.sin6_addr, 16);
-                                        dnsRight(targetHttp, false);
+                                        dnsRight(http, targetHttp);
                                     }
                                     cacheFound = true;
                                 }
@@ -341,12 +341,12 @@ void DnsSeeker::parseEvent(const int &event, int socket) {
                                     if (!https.empty()) {
                                         memcpy(&targetHttps.sin6_addr,
                                                &entry.sin6_addr, 16);
-                                        dnsRight(targetHttps, true);
+                                        dnsRight(https, targetHttps);
                                     }
                                     if (!http.empty()) {
                                         memcpy(&targetHttp.sin6_addr,
                                                &entry.sin6_addr, 16);
-                                        dnsRight(targetHttp, false);
+                                        dnsRight(http, targetHttp);
                                     }
                                     cacheFound = true;
                                 }
@@ -382,12 +382,12 @@ void DnsSeeker::parseEvent(const int &event, int socket) {
                                             if (!https.empty()) {
                                                 memcpy(&targetHttps.sin6_addr,
                                                        &entry.sin6_addr, 16);
-                                                dnsRight(targetHttps, true);
+                                                dnsRight(https, targetHttps);
                                             }
                                             if (!http.empty()) {
                                                 memcpy(&targetHttp.sin6_addr,
                                                        &entry.sin6_addr, 16);
-                                                dnsRight(targetHttp, false);
+                                                dnsRight(http, targetHttp);
                                             }
                                             cacheFound = true;
                                         }
@@ -450,12 +450,12 @@ void DnsSeeker::parseEvent(const int &event, int socket) {
                                             if (!http.empty()) {
                                                 memcpy(&targetHttp.sin6_addr,
                                                        buffer + pos, 16);
-                                                dnsRight(targetHttp, false);
+                                                dnsRight(http, targetHttp);
                                             }
                                             if (!https.empty()) {
                                                 memcpy(&targetHttps.sin6_addr,
                                                        buffer + pos, 16);
-                                                dnsRight(targetHttps, true);
+                                                dnsRight(https, targetHttps);
                                             }
                                             removeQuery(transactionId);
                                         }
@@ -487,12 +487,12 @@ void DnsSeeker::parseEvent(const int &event, int socket) {
                                     if (!https.empty()) {
                                         memcpy(&targetHttps.sin6_addr,
                                                &entry.sin6_addr, 16);
-                                        dnsRight(targetHttps, true);
+                                        dnsRight(https, targetHttps);
                                     }
                                     if (!http.empty()) {
                                         memcpy(&targetHttp.sin6_addr,
                                                &entry.sin6_addr, 16);
-                                        dnsRight(targetHttp, false);
+                                        dnsRight(http, targetHttp);
                                     }
                                     cacheFound = true;
                                 }
@@ -622,7 +622,8 @@ bool DnsSeeker::read32Bits(uint32_t &var, const char *const data,
     return true;
 }
 
-bool DnsSeeker::GetAAAA(const std::string &host, const bool &https) {
+bool DnsSeeker::GetAAAA(void *request, const std::string &host,
+                        const bool &https) {
     if (dnsServerList.empty()) {
         std::cerr << "Sorry but the server list is empty" << std::endl;
         abort();
@@ -638,9 +639,9 @@ bool DnsSeeker::GetAAAA(const std::string &host, const bool &https) {
                     forceCache = true;
                 else {
                     if (https) {
-                        q.https.push_back(1);
+                        q.https.push_back(request);
                     } else {
-                        q.http.push_back(1);
+                        q.http.push_back(request);
                     }
                     return true;
                 }
@@ -663,10 +664,10 @@ bool DnsSeeker::GetAAAA(const std::string &host, const bool &https) {
                 case StatusEntry_Right:
                     if (https) {
                         memcpy(&targetHttps.sin6_addr, &entry.sin6_addr, 16);
-                        dnsRight(targetHttps, true);
+                        dnsRight(request, targetHttps);
                     } else {
                         memcpy(&targetHttp.sin6_addr, &entry.sin6_addr, 16);
-                        dnsRight(targetHttp, false);
+                        dnsRight(request, targetHttp);
                     }
                     break;
                 default:
@@ -779,10 +780,10 @@ bool DnsSeeker::GetAAAA(const std::string &host, const bool &https) {
             if (entry.status == StatusEntry_Right) {
                 if (https) {
                     memcpy(&targetHttps.sin6_addr, &entry.sin6_addr, 16);
-                    dnsRight(targetHttps, true);
+                    dnsRight(request, targetHttps);
                 } else {
                     memcpy(&targetHttp.sin6_addr, &entry.sin6_addr, 16);
-                    dnsRight(targetHttp, false);
+                    dnsRight(request, targetHttp);
                 }
                 return true;
             }
@@ -795,10 +796,9 @@ bool DnsSeeker::GetAAAA(const std::string &host, const bool &https) {
     }
 
     if (https)
-        queryToPush.https.push_back(1);
+        queryToPush.https.push_back(request);
     else
-        queryToPush.http.push_back(1);
-    Log(__FILE__, __LINE__) << queryToPush.host;
+        queryToPush.http.push_back(request);
     addQuery(query->id, queryToPush);
     return true;
 }
@@ -814,10 +814,11 @@ void DnsSeeker::removeQuery(const uint16_t &id, const bool &withNextDueTime) {
     const Query &query = queryList.at(id);
     if (withNextDueTime) {
         if (queryByNextDueTime.find(query.nextRetry) ==
-            queryByNextDueTime.cend())
+            queryByNextDueTime.cend()) {
             std::cerr << __FILE__ << ":" << __LINE__ << " query " << id
                       << " not found into queryByNextDueTime: "
                       << query.nextRetry << std::endl;
+        }
         queryByNextDueTime.erase(query.nextRetry);
     }
     if (queryByNextDueTime.find(query.nextRetry) == queryByNextDueTime.cend()) {
@@ -834,26 +835,26 @@ void DnsSeeker::removeQuery(const uint16_t &id, const bool &withNextDueTime) {
     if (httpInProgress > 0) httpInProgress--;
 }
 
-void DnsSeeker::cancelClient(const std::string &host, const bool &https,
-                             const bool &ignoreNotFound) {
+void DnsSeeker::cancelClient(void *request, const std::string &host,
+                             const bool &https, const bool &ignoreNotFound) {
     if (queryListByHost.find(host) != queryListByHost.cend()) {
         const uint16_t queryId = queryListByHost.at(host);
         if (queryList.find(queryId) != queryList.cend()) {
             if (https) {
-                std::vector<int> &httpsList = queryList[queryId].https;
+                std::vector<void *> &httpsList = queryList[queryId].https;
                 unsigned int index = 0;
                 while (index < httpsList.size()) {
-                    if (1 == httpsList.at(index)) {
+                    if (request == httpsList.at(index)) {
                         httpsList.erase(httpsList.cbegin() + index);
                         break;
                     }
                     index++;
                 }
             } else {
-                std::vector<int> &httpList = queryList[queryId].http;
+                std::vector<void *> &httpList = queryList[queryId].http;
                 unsigned int index = 0;
                 while (index < httpList.size()) {
-                    if (1 == httpList.at(index)) {
+                    if (request == httpList.at(index)) {
                         httpList.erase(httpList.cbegin() + index);
                         break;
                     }
@@ -1002,8 +1003,8 @@ void DnsSeeker::checkQueries() {
             query.retryTime++;
             if (query.retryTime >= DnsSeeker::retryBeforeError() &&
                 (!query.http.empty() || !query.http.empty())) {
-                const std::vector<int> &http = query.http;
-                const std::vector<int> &https = query.https;
+                const std::vector<void *> &http = query.http;
+                const std::vector<void *> &https = query.https;
                 bool cacheFound = false;
                 if (cacheAAAA.find(query.host) != cacheAAAA.cend()) {
                     CacheAAAAEntry &entry = cacheAAAA.at(query.host);
@@ -1016,11 +1017,11 @@ void DnsSeeker::checkQueries() {
                         if (!https.empty()) {
                             memcpy(&targetHttps.sin6_addr, &entry.sin6_addr,
                                    16);
-                            dnsRight(targetHttps, true);
+                            dnsRight(https, targetHttps);
                         }
                         if (!http.empty()) {
                             memcpy(&targetHttp.sin6_addr, &entry.sin6_addr, 16);
-                            dnsRight(targetHttp, false);
+                            dnsRight(http, targetHttp);
                         }
                         cacheFound = true;
                     }
@@ -1061,8 +1062,8 @@ void DnsSeeker::checkQueries() {
             }
 
             if (query.retryTime >= DnsSeeker::retryBeforeError() || !sendOk) {
-                const std::vector<int> &http = query.http;
-                const std::vector<int> &https = query.https;
+                const std::vector<void *> &http = query.http;
+                const std::vector<void *> &https = query.https;
                 bool cacheFound = false;
                 if (cacheAAAA.find(query.host) != cacheAAAA.cend()) {
                     CacheAAAAEntry &entry = cacheAAAA.at(query.host);
@@ -1075,11 +1076,11 @@ void DnsSeeker::checkQueries() {
                         if (!https.empty()) {
                             memcpy(&targetHttps.sin6_addr, &entry.sin6_addr,
                                    16);
-                            dnsRight(targetHttps, true);
+                            dnsRight(https, targetHttps);
                         }
                         if (!http.empty()) {
                             memcpy(&targetHttp.sin6_addr, &entry.sin6_addr, 16);
-                            dnsRight(targetHttp, false);
+                            dnsRight(http, targetHttp);
                         }
                         cacheFound = true;
                     }
@@ -1101,8 +1102,8 @@ void DnsSeeker::checkQueries() {
         Query &query = queryList[queryId];
 
         if (query.retryTime >= DnsSeeker::retryBeforeError()) {
-            const std::vector<int> &http = query.http;
-            const std::vector<int> &https = query.https;
+            const std::vector<void *> &http = query.http;
+            const std::vector<void *> &https = query.https;
             bool cacheFound = false;
             if (cacheAAAA.find(query.host) != cacheAAAA.cend()) {
                 CacheAAAAEntry &entry = cacheAAAA.at(query.host);
@@ -1114,11 +1115,11 @@ void DnsSeeker::checkQueries() {
                 if (entry.status == StatusEntry_Right) {
                     if (!https.empty()) {
                         memcpy(&targetHttps.sin6_addr, &entry.sin6_addr, 16);
-                        dnsRight(targetHttps, true);
+                        dnsRight(https, targetHttps);
                     }
                     if (!http.empty()) {
                         memcpy(&targetHttp.sin6_addr, &entry.sin6_addr, 16);
-                        dnsRight(targetHttp, false);
+                        dnsRight(http, targetHttp);
                     }
                     cacheFound = true;
                 }

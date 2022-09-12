@@ -49,15 +49,46 @@ void Dns::AddFetchAAAARequest(struct Request *request) {
    std::size_t pos = host.find("/");
    host = host.substr(0, pos);
 
-   GetAAAA(host, false);
+   GetAAAA((void *)request, host, false);
 }
 
-int Dns::HandleFetchAAAA(struct Request *request) { return 0; }
+int Dns::HandleFetchAAAA(struct Request *request) {
+   Log(__FILE__, __LINE__) << "llego";
+   return 0;
+}
 
-void Dns::dnsRight(const sockaddr_in6 &sIPv6, bool https) {
-   char astring[INET6_ADDRSTRLEN];
-   inet_ntop(AF_INET6, &(sIPv6.sin6_addr), astring, INET6_ADDRSTRLEN);
-   Log(__FILE__, __LINE__) << astring;
+void Dns::dnsRight(const std::vector<void *> &requests,
+                   const sockaddr_in6 &sIPv6) {
+   unsigned int index = 0;
+   while (index < requests.size()) {
+      struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
+      struct Request *request = (Request *)requests.at(index);
+      size_t size = sizeof(sockaddr_in6);
+      request->iov[4].iov_base = malloc(size);
+      request->iov[4].iov_len = size;
+      memcpy(request->iov[4].iov_base, &sIPv6, size);
+      request->event_type = EVENT_TYPE_HTTP_FETCH;
+
+      io_uring_prep_nop(sqe);
+      io_uring_sqe_set_data(sqe, request);
+      io_uring_submit(ring_);
+
+      index++;
+   }
+}
+
+void Dns::dnsRight(void *request, const sockaddr_in6 &sIPv6) {
+   /*
+      struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
+      struct Request *request = (Request *)requests.at(index);
+      size_t size = sizeof(sockaddr_in6);
+      request->iov[4].iov_base = malloc(size);
+      request->iov[4].iov_len = size;
+      memcpy(request->iov[4].iov_base, &sIPv6, size);
+
+      io_uring_sqe_set_data(sqe, request);
+      io_uring_submit(ring_);
+      */
 }
 
 void Dns::dnsError() { Log(__FILE__, __LINE__, Log::kError) << "dns error"; }

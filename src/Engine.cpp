@@ -1,8 +1,8 @@
 #include "Engine.hpp"
 
 #include "EventType.hpp"
-#include "Utils.hpp"
 #include "Logger.hpp"
+#include "Utils.hpp"
 
 #define READ_SZ 8192
 
@@ -112,7 +112,7 @@ void Engine::Run() {
             server_->AddReadRequest(cqe->res);
             break;
          case EVENT_TYPE_SERVER_READ: {
-            auto inner_request = Utils::CreateRequest(4);
+            auto inner_request = Utils::CreateRequest(5);
 
             bool is_method_valid = server_->HandleRead(request, inner_request);
             if (is_method_valid) {
@@ -136,27 +136,23 @@ void Engine::Run() {
             cache_->HandleRead(request);
             server_->AddWriteRequest(request);
             break;
+         case EVENT_TYPE_CACHE_WRITE:
+            cache_->HandleWrite(request);
+            server_->AddWriteRequest(request);
+            break;
          case EVENT_TYPE_DNS_VERIFY:
             dns_->HandleVerifyUDP();
             dns_->AddVerifyUDPRequest();
             Utils::ReleaseRequest(request);
             break;
-         case EVENT_TYPE_DNS_FETCHAAAA: {
-            int dns_fetch = dns_->HandleFetchAAAA(request);
-            if (dns_fetch == 0) {
-               http_->AddFetchDataRequest(request);
-            } else {
-               server_->AddHttpErrorRequest(request, 504);
-            }
-         } break;
+         case EVENT_TYPE_HTTP_FETCH:
+            http_->HandleFetchData(request);
+            cache_->AddWriteRequest(request);
+            break;
             /*
             case EVENT_TYPE_CACHE_VERIFY:
                cache_->HandleVerify();
                cache_->AddVerifyRequest();
-               break;
-            case EVENT_TYPE_HTTP_FETCH:
-               http_->HandleFetchData(req);
-               cache_->AddReadRequest(req);
                break;
                */
       }

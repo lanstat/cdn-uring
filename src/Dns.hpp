@@ -26,7 +26,9 @@ class Dns : public DnsSeeker {
    struct io_uring *ring_;
 
   protected:
-   void dnsRight(const sockaddr_in6 &sIPv6, bool https) override;
+   void dnsRight(const std::vector<void *> &requests,
+                 const sockaddr_in6 &sIPv6) override;
+   void dnsRight(void *request, const sockaddr_in6 &sIPv6) override;
    void dnsError() override;
    void dnsWrong() override;
 };

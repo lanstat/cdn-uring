@@ -1,8 +1,8 @@
 #include "Cache.hpp"
 
 #include "EventType.hpp"
-#include "Md5.hpp"
 #include "Logger.hpp"
+#include "Md5.hpp"
 
 #define INVALID_FILE 13816973012072644543ULL
 
@@ -74,6 +74,26 @@ void Cache::AddReadRequest(struct Request *request) {
    io_uring_submit(ring_);
 }
 
-int Cache::HandleRead(struct Request *request) {
-   return 0;
+int Cache::HandleRead(struct Request *request) { return 0; }
+
+void Cache::AddWriteRequest(struct Request *request) {
+   char *path = (char *)request->iov[1].iov_base;
+
+   int fd = open(path, O_CREAT | O_WRONLY | O_TRUNC,
+                 S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+
+   if (fd < 0) {
+      Log(__FILE__, __LINE__, Log::kError) << "wrong file" << path;
+      exit(1);
+   }
+
+   struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
+   request->event_type = EVENT_TYPE_CACHE_WRITE;
+
+   io_uring_prep_write(sqe, fd, request->iov[3].iov_base,
+                       request->iov[3].iov_len, 0);
+   io_uring_sqe_set_data(sqe, request);
+   io_uring_submit(ring_);
 }
+
+int Cache::HandleWrite(struct Request *request) { return 0; }

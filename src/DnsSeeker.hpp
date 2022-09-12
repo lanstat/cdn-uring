@@ -29,9 +29,8 @@ class DnsSeeker {
                            const int &size, int &pos);
     bool tryOpenSocket();
 
-    bool GetAAAA(const std::string &host,
-                 const bool &https);
-    void cancelClient(const std::string &host, const bool &https,
+    bool GetAAAA(void *request, const std::string &host, const bool &https);
+    void cancelClient(void *request, const std::string &host, const bool &https,
                       const bool &ignoreNotFound = false);
 
     int requestCountMerged();
@@ -45,7 +44,8 @@ class DnsSeeker {
     static const unsigned char include[];
     static const unsigned char exclude[];
 
-    virtual void dnsRight(const sockaddr_in6 &sIPv6, bool https) = 0;
+    virtual void dnsRight(const std::vector<void *> &requests, const sockaddr_in6 &sIPv6) = 0;
+    virtual void dnsRight(void * request, const sockaddr_in6 &sIPv6) = 0;
     virtual void dnsError() = 0;
     virtual void dnsWrong() = 0;
 
@@ -101,8 +101,8 @@ class DnsSeeker {
         std::string host;
         // separate http and https to improve performance by better caching
         // socket to open
-        std::vector<int> http;
-        std::vector<int> https;
+        std::vector<void *> http;
+        std::vector<void *> https;
         uint8_t retryTime;  // number of time all query was send, now all query
                             // is send at time
         uint64_t nextRetry;

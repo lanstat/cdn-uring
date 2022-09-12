@@ -4,6 +4,7 @@
 #include <time.h>
 
 #include "EventType.hpp"
+#include "Logger.hpp"
 #include "Request.hpp"
 #include "Utils.hpp"
 

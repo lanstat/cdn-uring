@@ -1,9 +1,0 @@
-HTTP/1.1 200 OK
-Content-Type: text/html
-Content-Length: 9
-Connection: close
-Accept-Ranges: bytes
-Server: Lighttpd
-RProxy: Confiared R1D1
-
-<h1>invalid</h1>
