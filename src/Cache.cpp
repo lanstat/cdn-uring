@@ -2,6 +2,7 @@
 
 #include "EventType.hpp"
 #include "Md5.hpp"
+#include "Logger.hpp"
 
 #define INVALID_FILE 13816973012072644543ULL
 
@@ -57,8 +58,7 @@ void Cache::AddReadRequest(struct Request *request) {
    int fd = open(path, O_RDONLY);
 
    if (fd < 0) {
-      std::cout << "LAN_[" << __FILE__ << ":" << __LINE__ << "] "
-                << "wrong file " << path << std::endl;
+      Log(__FILE__, __LINE__, Log::kError) << "wrong file" << path;
       exit(1);
    }
    struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);

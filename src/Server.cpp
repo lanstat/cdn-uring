@@ -15,6 +15,12 @@ const char *http_405_content =
     "\r\n"
     "Method Not Allowed \r\n";
 
+const char *http_504_content =
+    "HTTP/1.0 504 Gateway Timeout\r\n"
+    "Content-type: text/plain\r\n"
+    "\r\n"
+    "Gateway Timeout \r\n";
+
 Server::Server() { ring_ = nullptr; }
 
 void Server::SetRing(struct io_uring *ring) { ring_ = ring; }
@@ -68,6 +74,12 @@ void Server::AddHttpErrorRequest(struct Request *req, int status_code) {
 
    if (status_code == 405) {
       data = http_405_content;
+   }
+   switch (status_code) {
+      case 405:
+         data = http_405_content;
+      case 504:
+         data = http_504_content;
    }
 
    unsigned long slen = strlen(data);

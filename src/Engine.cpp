@@ -2,6 +2,7 @@
 
 #include "EventType.hpp"
 #include "Utils.hpp"
+#include "Logger.hpp"
 
 #define READ_SZ 8192
 
@@ -89,7 +90,7 @@ void Engine::Run() {
    http_->SetRing(&ring_);
 
    AddAcceptRequest(socket_, &client_addr, &client_addr_len);
-   // dns_->AddVerifyUDPRequest();
+   dns_->AddVerifyUDPRequest();
    // cache_->AddVerifyRequest();
 
    while (1) {
@@ -99,8 +100,9 @@ void Engine::Run() {
       }
       struct Request *request = (struct Request *)cqe->user_data;
 
-      std::cout << "LAN_[" << __FILE__ << ":" << __LINE__ << "] "
-                << request->event_type << std::endl;
+      if (request->event_type != EVENT_TYPE_DNS_VERIFY) {
+         Log(__FILE__, __LINE__, Log::kDebug) << request->event_type;
+      }
 
       switch (request->event_type) {
          case EVENT_TYPE_ACCEPT:
@@ -121,8 +123,7 @@ void Engine::Run() {
          } break;
          case EVENT_TYPE_SERVER_WRITE:
             server_->HandleWrite(request);
-            std::cout << "LAN_[" << __FILE__ << ":" << __LINE__ << "] "
-                      << "close socket" << std::endl;
+            Log(__FILE__, __LINE__) << "close socket";
             break;
          case EVENT_TYPE_CACHE_EXISTS:
             if (cache_->HandleExists(request) == 0) {
@@ -135,6 +136,19 @@ void Engine::Run() {
             cache_->HandleRead(request);
             server_->AddWriteRequest(request);
             break;
+         case EVENT_TYPE_DNS_VERIFY:
+            dns_->HandleVerifyUDP();
+            dns_->AddVerifyUDPRequest();
+            Utils::ReleaseRequest(request);
+            break;
+         case EVENT_TYPE_DNS_FETCHAAAA: {
+            int dns_fetch = dns_->HandleFetchAAAA(request);
+            if (dns_fetch == 0) {
+               http_->AddFetchDataRequest(request);
+            } else {
+               server_->AddHttpErrorRequest(request, 504);
+            }
+         } break;
             /*
             case EVENT_TYPE_CACHE_VERIFY:
                cache_->HandleVerify();
@@ -143,16 +157,6 @@ void Engine::Run() {
             case EVENT_TYPE_HTTP_FETCH:
                http_->HandleFetchData(req);
                cache_->AddReadRequest(req);
-               break;
-            case EVENT_TYPE_DNS_VERIFY:
-               dns_->HandleVerifyUDP();
-               dns_->AddVerifyUDPRequest();
-               break;
-            case EVENT_TYPE_DNS_FETCHAAAA:
-               int dns_fetch = dns_->HandleFetchAAAA(req);
-               if (dns_fetch == 0) {
-                  http_->AddFetchDataRequest(req);
-               }
                break;
                */
       }

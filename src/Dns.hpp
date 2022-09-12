@@ -6,21 +6,28 @@
 #include <iostream>
 #include <string>
 
+#include "DnsSeeker.hpp"
 #include "Request.hpp"
 
-class Dns {
- public:
-  Dns();
+class Dns : public DnsSeeker {
+  public:
+   Dns();
+   virtual ~Dns();
 
-  void SetRing(struct io_uring *ring);
+   void SetRing(struct io_uring *ring);
 
-  void AddVerifyUDPRequest();
-  int HandleVerifyUDP();
+   void AddVerifyUDPRequest();
+   int HandleVerifyUDP();
 
-  void AddFetchAAAARequest(struct Request *request);
-  int HandleFetchAAAA(struct Request *request);
+   void AddFetchAAAARequest(struct Request *request);
+   int HandleFetchAAAA(struct Request *request);
 
- private:
-  struct io_uring *ring_;
+  private:
+   struct io_uring *ring_;
+
+  protected:
+   void dnsRight(const sockaddr_in6 &sIPv6, bool https) override;
+   void dnsError() override;
+   void dnsWrong() override;
 };
 #endif

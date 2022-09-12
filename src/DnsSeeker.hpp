@@ -1,5 +1,5 @@
-#ifndef SRC_DNS_HPP_
-#define SRC_DNS_HPP_
+#ifndef SRC_DNSSEEKER_HPP_
+#define SRC_DNSSEEKER_HPP_
 
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -9,18 +9,14 @@
 #include <unordered_map>
 #include <vector>
 
-#include "DnsRequest.hpp"
-
 #define CACHETIMEDIVIDER 1
 // should be power of 2
 #define MAXDNSSERVER 16
 
-class Http;
-
-class Dns: public DnsSeeker {
-   public:
-    Dns();
-    ~Dns();
+class DnsSeeker {
+   protected:
+    DnsSeeker();
+    ~DnsSeeker();
     void parseEvent(const int &event, int socket);
     inline bool canAddToPos(const int &i, const int &size, int &pos);
     inline bool read8Bits(uint8_t &var, const char *const data, const int &size,
@@ -33,10 +29,11 @@ class Dns: public DnsSeeker {
                            const int &size, int &pos);
     bool tryOpenSocket();
 
-    bool GetAAAA(DnsRequest *request, const std::string &host,
+    bool GetAAAA(const std::string &host,
                  const bool &https);
-    void cancelClient(Http *http, const std::string &host, const bool &https,
+    void cancelClient(const std::string &host, const bool &https,
                       const bool &ignoreNotFound = false);
+
     int requestCountMerged();
     void cleanCache();
     void checkQueries();
@@ -48,9 +45,10 @@ class Dns: public DnsSeeker {
     static const unsigned char include[];
     static const unsigned char exclude[];
 
-    void dnsRight(const sockaddr_in6 &sIPv6);
-    void dnsError();
-    void dnsWrong();
+    virtual void dnsRight(const sockaddr_in6 &sIPv6, bool https) = 0;
+    virtual void dnsError() = 0;
+    virtual void dnsWrong() = 0;
+
     uint64_t msFrom1970();
 
     in6_addr *GetEntry(const std::string &host);
@@ -103,8 +101,8 @@ class Dns: public DnsSeeker {
         std::string host;
         // separate http and https to improve performance by better caching
         // socket to open
-        std::vector<DnsRequest*> http;
-        std::vector<DnsRequest*> https;
+        std::vector<int> http;
+        std::vector<int> https;
         uint8_t retryTime;  // number of time all query was send, now all query
                             // is send at time
         uint64_t nextRetry;
