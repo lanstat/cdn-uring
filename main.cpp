@@ -5,7 +5,7 @@
 #include "src/Logger.hpp"
 
 #define DEFAULT_SERVER_PORT 8000
-#define QUEUE_DEPTH 256
+#define QUEUE_DEPTH 512
 
 Engine* engine_ = nullptr;
 
@@ -15,7 +15,21 @@ void SigIntHandler(int signo) {
     exit(0);
 }
 
-int main() {
+void ParserArguments(int argc, char** argv) {
+    for (int i = 0; i < argc; ++i) {
+        if (strcmp(argv[i], "-debug") == 0) {
+            Log::PrintDebug = true;
+            continue;
+        }
+        if (strcmp(argv[i], "-silent") == 0) {
+            Log::NoLog = true;
+            continue;
+        }
+    }
+}
+
+int main(int argc, char** argv) {
+    ParserArguments(argc, argv);
     engine_ = new Engine();
     engine_->SetupListeningSocket(DEFAULT_SERVER_PORT);
 

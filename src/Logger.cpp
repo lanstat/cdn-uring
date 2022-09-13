@@ -3,6 +3,9 @@
 #include <chrono>
 #include <ctime>
 
+bool Log::PrintDebug = false;
+bool Log::NoLog = false;
+
 const std::string currentDateTime() {
    time_t now = time(0);
    struct tm tstruct;
@@ -28,12 +31,20 @@ Log::Log(const char *file, int line, Mode mode) {
 }
 
 Log::~Log() {
+   if (!CanPrint()) return;
    std::cout << std::endl;
 }
 
+bool Log::CanPrint() {
+   if (NoLog) return false;
+   if (mode_ == kDebug && !PrintDebug) return false;
+   return true;
+}
+
 void Log::PrintHeader() {
+   if (!CanPrint()) return;
    std::cout << currentDateTime();
-   switch(mode_) {
+   switch (mode_) {
       case kDebug:
          std::cout << " \033[1;34mDEBUG\033[0m   ";
          break;
@@ -51,16 +62,19 @@ void Log::PrintHeader() {
 }
 
 Log &Log::operator<<(int t) {
+   if (!CanPrint()) return *this;
    std::cout << t;
    return *this;
 }
 
 Log &Log::operator<<(const char *t) {
+   if (!CanPrint()) return *this;
    std::cout << t;
    return *this;
 }
 
 Log &Log::operator<<(const std::string &t) {
+   if (!CanPrint()) return *this;
    std::cout << t;
    return *this;
 }

@@ -10,6 +10,12 @@
 
 #define READ_SZ 8192
 
+const char *http_400_content =
+    "HTTP/1.0 400 Bad Request\r\n"
+    "Content-type: text/plain\r\n"
+    "\r\n"
+    "Bad Request \r\n";
+
 const char *http_405_content =
     "HTTP/1.0 405 Method Not Allowed\r\n"
     "Content-type: text/plain\r\n"
@@ -46,8 +52,9 @@ bool Server::HandleRead(struct Request *request,
    /* Get the first line, which will be the Request */
    if (GetLine((char *)request->iov[0].iov_base, http_request,
                sizeof(http_request))) {
-      fprintf(stderr, "Malformed request\n");
-      exit(1);
+      Log(__FILE__, __LINE__, Log::kError) << "Malformed request";
+      AddHttpErrorRequest(request, 400);
+      return false;
    }
    char *method, *path, *saveptr;
 
@@ -64,6 +71,7 @@ bool Server::HandleRead(struct Request *request,
    if (strcmp(method, "get") == 0) {
       return true;
    }
+   AddHttpErrorRequest(request, 405);
    return false;
 }
 
@@ -73,10 +81,9 @@ void Server::AddHttpErrorRequest(struct Request *req, int status_code) {
 
    const char *data;
 
-   if (status_code == 405) {
-      data = http_405_content;
-   }
    switch (status_code) {
+      case 400:
+         data = http_400_content;
       case 405:
          data = http_405_content;
       case 504:
@@ -100,6 +107,7 @@ int Server::GetLine(const char *src, char *dest, int dest_sz) {
          return 0;
       }
    }
+   Log(__FILE__, __LINE__) << src;
    return 1;
 }
 

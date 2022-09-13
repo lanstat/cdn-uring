@@ -8,9 +8,11 @@
 
 std::string PATH = "/home/lanstat/projects/confiared/my-cdn/cache/";
 
-Cache::Cache() {}
+Cache::Cache() { server_ = nullptr; }
 
 void Cache::SetRing(struct io_uring *ring) { ring_ = ring; }
+
+void Cache::SetServer(Server *server) { server_ = server; }
 
 std::string Cache::GetUID(char *url) {
    std::string aux(url);
@@ -22,13 +24,29 @@ std::string Cache::GetUID(char *url) {
 }
 
 void Cache::AddExistsRequest(struct Request *request) {
+   std::string path = GetUID((char *)request->iov[0].iov_base);
+
+   // In the case of the file is cached
+   if (files_.find(path) != files_.cend()) {
+      struct File file = files_.at(path);
+      AddCopyRequest(request, &file);
+      return;
+   } else {
+      // If there is other request fetching the file wait until finished
+      if (waiting_read_.find(path) != waiting_read_.cend()) {
+         waiting_read_.at(path).push_back(request);
+         return;
+      }
+      std::vector<struct Request *> requests;
+      std::pair<std::string, std::vector<struct Request *>> item(path,
+                                                                 requests);
+      waiting_read_.insert(item);
+   }
    struct statx stx;
    size_t size = sizeof(stx);
    request->iov[2].iov_base = malloc(size);
    request->iov[2].iov_len = size;
    memset(request->iov[2].iov_base, 0xbf, size);
-
-   std::string path = GetUID((char *)request->iov[0].iov_base);
 
    request->iov[1].iov_base = malloc(path.length() + 1);
    request->iov[1].iov_len = path.length() + 1;
@@ -58,7 +76,8 @@ void Cache::AddReadRequest(struct Request *request) {
    int fd = open(path, O_RDONLY);
 
    if (fd < 0) {
-      Log(__FILE__, __LINE__, Log::kError) << "wrong file" << path;
+      Log(__FILE__, __LINE__, Log::kError)
+          << "wrong file " << path << " " << strerror(errno);
       exit(1);
    }
    struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
@@ -74,7 +93,24 @@ void Cache::AddReadRequest(struct Request *request) {
    io_uring_submit(ring_);
 }
 
-int Cache::HandleRead(struct Request *request) { return 0; }
+int Cache::HandleRead(struct Request *request) {
+   std::string path((char *)request->iov[1].iov_base);
+
+   struct File file;
+   file.data = malloc(request->iov[3].iov_len);
+   file.size = request->iov[3].iov_len;
+   memcpy(file.data, request->iov[3].iov_base, file.size);
+   std::pair<std::string, struct File> item(path, file);
+   files_.insert(item);
+
+   const std::vector<struct Request *> &requests = waiting_read_.at(path);
+   for(struct Request * const c : requests) {
+      AddCopyRequest(c, &file);
+   }
+   waiting_read_.erase(path);
+
+   return 0;
+}
 
 void Cache::AddWriteRequest(struct Request *request) {
    char *path = (char *)request->iov[1].iov_base;
@@ -83,7 +119,8 @@ void Cache::AddWriteRequest(struct Request *request) {
                  S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
 
    if (fd < 0) {
-      Log(__FILE__, __LINE__, Log::kError) << "wrong file" << path;
+      Log(__FILE__, __LINE__, Log::kError)
+          << "wrong write file " << path << " " << strerror(errno);
       exit(1);
    }
 
@@ -97,3 +134,12 @@ void Cache::AddWriteRequest(struct Request *request) {
 }
 
 int Cache::HandleWrite(struct Request *request) { return 0; }
+
+void Cache::AddCopyRequest(struct Request *request, File *file) {
+   request->iov[3].iov_base = malloc(file->size);
+   request->iov[3].iov_len = file->size;
+
+   memcpy(request->iov[3].iov_base, file->data, file->size);
+
+   server_->AddWriteRequest(request);
+}

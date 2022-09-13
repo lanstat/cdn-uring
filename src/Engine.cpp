@@ -6,6 +6,43 @@
 
 #define READ_SZ 8192
 
+void PrintRequestType(int type) {
+   std::string type_str;
+   switch(type) {
+      case EVENT_TYPE_ACCEPT:
+         type_str = "EVENT_TYPE_ACCEPT";
+         break;
+      case EVENT_TYPE_SERVER_READ:
+         type_str = "EVENT_TYPE_SERVER_READ";
+         break;
+      case EVENT_TYPE_SERVER_WRITE:
+         type_str = "EVENT_TYPE_SERVER_WRITE";
+         break;
+      case EVENT_TYPE_HTTP_FETCH:
+         type_str = "EVENT_TYPE_HTTP_FETCH";
+         break;
+      case EVENT_TYPE_DNS_VERIFY:
+         type_str = "EVENT_TYPE_DNS_VERIFY";
+         break;
+      case EVENT_TYPE_DNS_FETCHAAAA:
+         type_str = "EVENT_TYPE_DNS_FETCHAAAA";
+         break;
+      case EVENT_TYPE_CACHE_EXISTS:
+         type_str = "EVENT_TYPE_CACHE_EXISTS";
+         break;
+      case EVENT_TYPE_CACHE_READ:
+         type_str = "EVENT_TYPE_CACHE_READ";
+         break;
+      case EVENT_TYPE_CACHE_VERIFY:
+         type_str = "EVENT_TYPE_CACHE_VERIFY";
+         break;
+      case EVENT_TYPE_CACHE_WRITE:
+         type_str = "EVENT_TYPE_CACHE_WRITE";
+         break;
+   }
+   Log(__FILE__, __LINE__, Log::kDebug) <<  type_str;
+}
+
 Engine::Engine() {
    dns_ = new Dns();
    server_ = new Server();
@@ -84,9 +121,11 @@ void Engine::Run() {
    struct io_uring_cqe *cqe;
    struct sockaddr_in client_addr;
    socklen_t client_addr_len = sizeof(client_addr);
+
    server_->SetRing(&ring_);
-   dns_->SetRing(&ring_);
    cache_->SetRing(&ring_);
+   cache_->SetServer(server_);
+   dns_->SetRing(&ring_);
    http_->SetRing(&ring_);
 
    AddAcceptRequest(socket_, &client_addr, &client_addr_len);
@@ -101,7 +140,7 @@ void Engine::Run() {
       struct Request *request = (struct Request *)cqe->user_data;
 
       if (request->event_type != EVENT_TYPE_DNS_VERIFY) {
-         Log(__FILE__, __LINE__, Log::kDebug) << request->event_type;
+         PrintRequestType(request->event_type);
       }
 
       switch (request->event_type) {
@@ -114,11 +153,8 @@ void Engine::Run() {
          case EVENT_TYPE_SERVER_READ: {
             auto inner_request = Utils::CreateRequest(5);
 
-            bool is_method_valid = server_->HandleRead(request, inner_request);
-            if (is_method_valid) {
+            if (server_->HandleRead(request, inner_request)) {
                cache_->AddExistsRequest(inner_request);
-            } else {
-               server_->AddHttpErrorRequest(inner_request, 405);
             }
          } break;
          case EVENT_TYPE_SERVER_WRITE:
