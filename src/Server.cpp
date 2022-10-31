@@ -22,6 +22,12 @@ const char *http_405_content =
     "\r\n"
     "Method Not Allowed \r\n";
 
+const char *http_502_content =
+    "HTTP/1.0 502 Bad Gateway\r\n"
+    "Content-type: text/plain\r\n"
+    "\r\n"
+    "Bad Gateway \r\n";
+
 const char *http_504_content =
     "HTTP/1.0 504 Gateway Timeout\r\n"
     "Content-type: text/plain\r\n"
@@ -53,7 +59,8 @@ bool Server::HandleRead(struct Request *request,
    if (GetLine((char *)request->iov[0].iov_base, http_request,
                sizeof(http_request))) {
       Log(__FILE__, __LINE__, Log::kError) << "Malformed request";
-      AddHttpErrorRequest(request, 400);
+      AddHttpErrorRequest(request->client_socket, 400);
+      Utils::ReleaseRequest(request);
       return false;
    }
    char *method, *path, *saveptr;
@@ -67,27 +74,39 @@ bool Server::HandleRead(struct Request *request,
    strcpy((char *)inner_request->iov[0].iov_base, path);
    inner_request->client_socket = request->client_socket;
 
-   Utils::ReleaseRequest(request);
    if (strcmp(method, "get") == 0) {
+      Utils::ReleaseRequest(request);
       return true;
    }
-   AddHttpErrorRequest(request, 405);
+   AddHttpErrorRequest(request->client_socket, 405);
+   Utils::ReleaseRequest(request);
+
    return false;
 }
 
-void Server::AddHttpErrorRequest(struct Request *req, int status_code) {
+void Server::AddHttpErrorRequest(int client_socket, int status_code) {
+   struct Request *req = Utils::CreateRequest(3);
    struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
    req->event_type = EVENT_TYPE_SERVER_WRITE;
+   req->client_socket = client_socket;
 
    const char *data;
+
+   std::cout<< "LAN_[" << __FILE__ << ":" << __LINE__ << "] "<< status_code << std::endl;
 
    switch (status_code) {
       case 400:
          data = http_400_content;
+         break;
       case 405:
          data = http_405_content;
+         break;
+      case 502:
+         data = http_502_content;
+         break;
       case 504:
          data = http_504_content;
+         break;
    }
 
    unsigned long slen = strlen(data);

@@ -127,6 +127,7 @@ void Engine::Run() {
    cache_->SetServer(server_);
    dns_->SetRing(&ring_);
    http_->SetRing(&ring_);
+   http_->SetServer(server_);
 
    AddAcceptRequest(socket_, &client_addr, &client_addr_len);
    dns_->AddVerifyUDPRequest();

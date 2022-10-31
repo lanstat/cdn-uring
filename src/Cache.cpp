@@ -2,6 +2,7 @@
 
 #include "EventType.hpp"
 #include "Logger.hpp"
+#include "Utils.hpp"
 #include "Md5.hpp"
 
 #define INVALID_FILE 13816973012072644543ULL
@@ -26,6 +27,7 @@ std::string Cache::GetUID(char *url) {
 void Cache::AddExistsRequest(struct Request *request) {
    std::string path = GetUID((char *)request->iov[0].iov_base);
 
+   std::cout<< "LAN_[" << __FILE__ << ":" << __LINE__ << "] "<< "asdasd" << std::endl;
    // In the case of the file is cached
    if (files_.find(path) != files_.cend()) {
       struct File file = files_.at(path);
@@ -42,6 +44,8 @@ void Cache::AddExistsRequest(struct Request *request) {
                                                                  requests);
       waiting_read_.insert(item);
    }
+   ReleaseAllWaitingRequest(request, 502);
+   return;
    struct statx stx;
    size_t size = sizeof(stx);
    request->iov[2].iov_base = malloc(size);
@@ -78,7 +82,8 @@ void Cache::AddReadRequest(struct Request *request) {
    if (fd < 0) {
       Log(__FILE__, __LINE__, Log::kError)
           << "wrong file " << path << " " << strerror(errno);
-      exit(1);
+      ReleaseAllWaitingRequest(request, 502);
+      return;
    }
    struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
    request->iov[3].iov_base = malloc(stx->stx_size);
@@ -100,8 +105,8 @@ int Cache::HandleRead(struct Request *request) {
    file.data = malloc(request->iov[3].iov_len);
    file.size = request->iov[3].iov_len;
    memcpy(file.data, request->iov[3].iov_base, file.size);
-   std::pair<std::string, struct File> item(path, file);
-   files_.insert(item);
+
+   StoreFileInMemory(request);
 
    const std::vector<struct Request *> &requests = waiting_read_.at(path);
    for(struct Request * const c : requests) {
@@ -121,7 +126,8 @@ void Cache::AddWriteRequest(struct Request *request) {
    if (fd < 0) {
       Log(__FILE__, __LINE__, Log::kError)
           << "wrong write file " << path << " " << strerror(errno);
-      exit(1);
+      ReleaseAllWaitingRequest(request, 502);
+      return;
    }
 
    struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
@@ -133,7 +139,10 @@ void Cache::AddWriteRequest(struct Request *request) {
    io_uring_submit(ring_);
 }
 
-int Cache::HandleWrite(struct Request *request) { return 0; }
+int Cache::HandleWrite(struct Request *request) {
+   StoreFileInMemory(request);
+   return 0;
+}
 
 void Cache::AddCopyRequest(struct Request *request, File *file) {
    request->iov[3].iov_base = malloc(file->size);
@@ -142,4 +151,26 @@ void Cache::AddCopyRequest(struct Request *request, File *file) {
    memcpy(request->iov[3].iov_base, file->data, file->size);
 
    server_->AddWriteRequest(request);
+}
+
+void Cache::StoreFileInMemory(struct Request *request) {
+   std::string path = GetUID((char *)request->iov[0].iov_base);
+   struct File file;
+   file.data = malloc(request->iov[3].iov_len);
+   file.size = request->iov[3].iov_len;
+   std::pair<std::string, struct File> item(path, file);
+   files_.insert(item);
+}
+
+void Cache::ReleaseAllWaitingRequest(struct Request *request, int status_code) {
+   std::string path = GetUID((char *)request->iov[0].iov_base);
+   server_->AddHttpErrorRequest(request->client_socket, status_code);
+   Utils::ReleaseRequest(request);
+
+   const std::vector<struct Request *> &requests = waiting_read_.at(path);
+   for(struct Request * const c : requests) {
+      server_->AddHttpErrorRequest(c->client_socket, status_code);
+      Utils::ReleaseRequest(c);
+   }
+   waiting_read_.erase(path);
 }

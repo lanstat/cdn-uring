@@ -14,7 +14,7 @@ class Server {
    void SetRing(struct io_uring *ring);
 
    void AddReadRequest(int client_socket);
-   void AddHttpErrorRequest(struct Request *request, int status_code);
+   void AddHttpErrorRequest(int client_socket, int status_code);
    bool HandleRead(struct Request *request, struct Request *inner_request);
 
    void AddWriteRequest(struct Request *request);

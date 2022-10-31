@@ -43,5 +43,7 @@ class Cache {
   std::unordered_map<std::string, std::vector<struct Request *>> waiting_read_;
 
   void AddCopyRequest(struct Request *request, File *file);
+  void StoreFileInMemory(struct Request *request);
+  void ReleaseAllWaitingRequest(struct Request *request, int status_code);
 };
 #endif

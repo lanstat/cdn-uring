@@ -7,11 +7,14 @@
 #include <vector>
 
 #include "Logger.hpp"
+#include "Utils.hpp"
 #define BUFFER_SIZE 1024
 
 Http::Http() {}
 
 void Http::SetRing(struct io_uring *ring) { ring_ = ring; }
+
+void Http::SetServer(Server *server) { server_ = server; }
 
 void Http::AddFetchDataRequest(struct Request *req) {}
 
@@ -37,14 +40,19 @@ void Http::Fetch(struct Request *request) {
 
    if (sock < 0) {
       Log(__FILE__, __LINE__, Log::kError) << "Error creating socket";
-      exit(1);
+
+      server_->AddHttpErrorRequest(request->client_socket, 502);
+      Utils::ReleaseRequest(request);
+      return;
    }
 
    if (connect(sock, (struct sockaddr *)client, sizeof(struct sockaddr_in6)) <
        0) {
       close(sock);
       Log(__FILE__, __LINE__, Log::kError) << "Could not connect ";
-      exit(1);
+      server_->AddHttpErrorRequest(request->client_socket, 502);
+      Utils::ReleaseRequest(request);
+      return;
    }
 
    std::stringstream ss;
@@ -58,7 +66,9 @@ void Http::Fetch(struct Request *request) {
    if (send(sock, request_data.c_str(), request_data.length(), 0) !=
        (int)request_data.length()) {
       Log(__FILE__, __LINE__, Log::kError) << "invalid socket";
-      exit(1);
+      server_->AddHttpErrorRequest(request->client_socket, 502);
+      Utils::ReleaseRequest(request);
+      return;
    }
 
    unsigned char tmp[BUFFER_SIZE];
@@ -74,3 +84,5 @@ void Http::Fetch(struct Request *request) {
 
    memcpy(request->iov[3].iov_base, buffer.data(), buffer.size());
 }
+
+void Http::AddReadRequest(struct Request *request, int fd) {}
