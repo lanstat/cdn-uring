@@ -92,8 +92,6 @@ void Server::AddHttpErrorRequest(int client_socket, int status_code) {
 
    const char *data;
 
-   std::cout<< "LAN_[" << __FILE__ << ":" << __LINE__ << "] "<< status_code << std::endl;
-
    switch (status_code) {
       case 400:
          data = http_400_content;

@@ -21,6 +21,9 @@ void PrintRequestType(int type) {
       case EVENT_TYPE_HTTP_FETCH:
          type_str = "EVENT_TYPE_HTTP_FETCH";
          break;
+      case EVENT_TYPE_HTTP_READ:
+         type_str = "EVENT_TYPE_HTTP_READ";
+         break;
       case EVENT_TYPE_DNS_VERIFY:
          type_str = "EVENT_TYPE_DNS_VERIFY";
          break;
@@ -126,8 +129,10 @@ void Engine::Run() {
    cache_->SetRing(&ring_);
    cache_->SetServer(server_);
    dns_->SetRing(&ring_);
+
    http_->SetRing(&ring_);
    http_->SetServer(server_);
+   http_->SetCache(cache_);
 
    AddAcceptRequest(socket_, &client_addr, &client_addr_len);
    dns_->AddVerifyUDPRequest();
@@ -184,7 +189,11 @@ void Engine::Run() {
             break;
          case EVENT_TYPE_HTTP_FETCH:
             http_->HandleFetchData(request);
-            cache_->AddWriteRequest(request);
+            break;
+         case EVENT_TYPE_HTTP_READ:
+            if (http_->HandleReadData(request) != 0) {
+               Utils::ReleaseRequest(request);
+            }
             break;
             /*
             case EVENT_TYPE_CACHE_VERIFY:

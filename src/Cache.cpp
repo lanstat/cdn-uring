@@ -27,7 +27,6 @@ std::string Cache::GetUID(char *url) {
 void Cache::AddExistsRequest(struct Request *request) {
    std::string path = GetUID((char *)request->iov[0].iov_base);
 
-   std::cout<< "LAN_[" << __FILE__ << ":" << __LINE__ << "] "<< "asdasd" << std::endl;
    // In the case of the file is cached
    if (files_.find(path) != files_.cend()) {
       struct File file = files_.at(path);
@@ -44,8 +43,7 @@ void Cache::AddExistsRequest(struct Request *request) {
                                                                  requests);
       waiting_read_.insert(item);
    }
-   ReleaseAllWaitingRequest(request, 502);
-   return;
+
    struct statx stx;
    size_t size = sizeof(stx);
    request->iov[2].iov_base = malloc(size);
@@ -158,6 +156,7 @@ void Cache::StoreFileInMemory(struct Request *request) {
    struct File file;
    file.data = malloc(request->iov[3].iov_len);
    file.size = request->iov[3].iov_len;
+   memcpy(file.data, request->iov[3].iov_base, file.size);
    std::pair<std::string, struct File> item(path, file);
    files_.insert(item);
 }
