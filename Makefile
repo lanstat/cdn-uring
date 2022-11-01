@@ -6,9 +6,9 @@ first: all
 all: cdn
 
 cdn: main.o
-	$(CC) $(CFLAGS) -o cdn main.o Engine.o Http.o Cache.o Md5.o Server.o Dns.o Utils.o DnsSeeker.o Logger.o HttpClient.o HttpsClient.o
+	$(CC) $(CFLAGS) -o cdn main.o Engine.o Http.o Cache.o Server.o Dns.o Utils.o DnsSeeker.o Logger.o HttpClient.o HttpsClient.o
 
-main.o: Cache.o Http.o Engine.o Md5.o Server.o Dns.o Utils.o DnsSeeker.o Logger.o HttpClient.o HttpsClient.o
+main.o: Cache.o Http.o Engine.o Server.o Dns.o Utils.o DnsSeeker.o Logger.o HttpClient.o HttpsClient.o
 	$(CC) $(CFLAGS) -c ./main.cpp
 
 test: main-test.o
@@ -29,11 +29,8 @@ HttpClient.o: ./src/HttpClient.hpp
 HttpsClient.o: ./src/HttpsClient.hpp
 	$(CC) $(CFLAGS) -c ./src/HttpsClient.cpp
 
-Cache.o: ./src/Cache.hpp ./src/Md5.hpp
+Cache.o: ./src/Cache.hpp ./src/xxhash64.h
 	$(CC) $(CFLAGS) -c ./src/Cache.cpp
-
-Md5.o: ./src/Md5.hpp
-	$(CC) $(CFLAGS) -c ./src/Md5.cpp
 
 Server.o: ./src/Server.hpp
 	$(CC) $(CFLAGS) -c ./src/Server.cpp

@@ -14,6 +14,7 @@
 class Http {
   public:
    Http();
+   virtual ~Http();
 
    void SetRing(struct io_uring *ring);
    void SetServer(Server *server);

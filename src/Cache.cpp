@@ -1,13 +1,15 @@
 #include "Cache.hpp"
 
+#include <cstring>
+
 #include "EventType.hpp"
 #include "Logger.hpp"
 #include "Utils.hpp"
-#include "Md5.hpp"
+#include "xxhash64.h"
 
 #define INVALID_FILE 13816973012072644543ULL
 
-std::string PATH = "/home/lanstat/projects/confiared/my-cdn/cache/";
+std::string Cache::CacheDir = "";
 
 Cache::Cache() { server_ = nullptr; }
 
@@ -17,10 +19,10 @@ void Cache::SetServer(Server *server) { server_ = server; }
 
 std::string Cache::GetUID(char *url) {
    std::string aux(url);
-   auto uid = md5(aux);
+   auto uid = XXHash64::hash(url, aux.length(), 0);
    std::string uri;
-   uri.append(PATH);
-   uri.append(uid);
+   uri.append(CacheDir);
+   uri.append(std::to_string(uid));
    return uri;
 }
 
@@ -107,7 +109,7 @@ int Cache::HandleRead(struct Request *request) {
    StoreFileInMemory(request);
 
    const std::vector<struct Request *> &requests = waiting_read_.at(path);
-   for(struct Request * const c : requests) {
+   for (struct Request *const c : requests) {
       AddCopyRequest(c, &file);
    }
    waiting_read_.erase(path);
@@ -167,7 +169,7 @@ void Cache::ReleaseAllWaitingRequest(struct Request *request, int status_code) {
    Utils::ReleaseRequest(request);
 
    const std::vector<struct Request *> &requests = waiting_read_.at(path);
-   for(struct Request * const c : requests) {
+   for (struct Request *const c : requests) {
       server_->AddHttpErrorRequest(c->client_socket, status_code);
       Utils::ReleaseRequest(c);
    }

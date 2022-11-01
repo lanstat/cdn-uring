@@ -14,6 +14,8 @@ Http::Http() {
    buffer_size_ = 1024;
 }
 
+Http::~Http() {}
+
 void Http::SetRing(struct io_uring *ring) { ring_ = ring; }
 
 void Http::SetServer(Server *server) { server_ = server; }

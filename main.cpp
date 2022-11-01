@@ -1,7 +1,10 @@
 #include <liburing.h>
 #include <signal.h>
 
+#include <filesystem>
+
 #include "src/Engine.hpp"
+#include "src/Cache.hpp"
 #include "src/Logger.hpp"
 
 #define DEFAULT_SERVER_PORT 8000
@@ -34,6 +37,10 @@ void ParserArguments(int argc, char** argv) {
 
 int main(int argc, char** argv) {
     ParserArguments(argc, argv);
+
+    std::filesystem::path cwd = std::filesystem::current_path() / "cache/" ;
+    Cache::CacheDir = cwd.string();
+
     engine_ = new Engine();
     engine_->SetupListeningSocket(DEFAULT_SERVER_PORT);
 
