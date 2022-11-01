@@ -1,14 +1,14 @@
 CC = g++
-CFLAGS = -Wall -g -luring
+CFLAGS = -Wall -g -luring -lssl -lcrypto
 
 first: all
 
 all: cdn
 
 cdn: main.o
-	$(CC) $(CFLAGS) -o cdn main.o Engine.o Http.o Cache.o Md5.o Server.o Dns.o Utils.o DnsSeeker.o Logger.o
+	$(CC) $(CFLAGS) -o cdn main.o Engine.o Http.o Cache.o Md5.o Server.o Dns.o Utils.o DnsSeeker.o Logger.o HttpClient.o HttpsClient.o
 
-main.o: Cache.o Http.o Engine.o Md5.o Server.o Dns.o Utils.o DnsSeeker.o Logger.o
+main.o: Cache.o Http.o Engine.o Md5.o Server.o Dns.o Utils.o DnsSeeker.o Logger.o HttpClient.o HttpsClient.o
 	$(CC) $(CFLAGS) -c ./main.cpp
 
 test: main-test.o
@@ -17,11 +17,17 @@ test: main-test.o
 main-test.o: Logger.o
 	$(CC) $(CFLAGS) -c ./main-test.cpp
 
-Engine.o: ./src/Engine.hpp ./src/Cache.hpp ./src/Server.hpp ./src/Dns.hpp
+Engine.o: ./src/Engine.hpp ./src/Cache.hpp ./src/Server.hpp ./src/Dns.hpp ./src/HttpClient.hpp ./src/HttpsClient.hpp
 	$(CC) $(CFLAGS) -c ./src/Engine.cpp
 
 Http.o: ./src/Http.hpp
 	$(CC) $(CFLAGS) -c ./src/Http.cpp
+
+HttpClient.o: ./src/HttpClient.hpp
+	$(CC) $(CFLAGS) -c ./src/HttpClient.cpp
+
+HttpsClient.o: ./src/HttpsClient.hpp
+	$(CC) $(CFLAGS) -c ./src/HttpsClient.cpp
 
 Cache.o: ./src/Cache.hpp ./src/Md5.hpp
 	$(CC) $(CFLAGS) -c ./src/Cache.cpp

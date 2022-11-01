@@ -14,6 +14,5 @@ class Utils {
    static void StrToLower(char *str);
    static struct Request *CreateRequest(int iovec_count);
    static void ReleaseRequest(struct Request *request);
-   static void OffsetMemcpy(char *dest, char* src, size_t offset, size_t size);
 };
 #endif

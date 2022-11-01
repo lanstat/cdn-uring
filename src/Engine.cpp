@@ -3,8 +3,12 @@
 #include "EventType.hpp"
 #include "Logger.hpp"
 #include "Utils.hpp"
+#include "HttpClient.hpp"
+#include "HttpsClient.hpp"
 
 #define READ_SZ 8192
+
+bool Engine::UseSSL = false;
 
 void PrintRequestType(int type) {
    std::string type_str;
@@ -50,7 +54,12 @@ Engine::Engine() {
    dns_ = new Dns();
    server_ = new Server();
    cache_ = new Cache();
-   http_ = new Http();
+
+   if (Engine::UseSSL) {
+      http_ = new HttpsClient();
+   } else {
+      http_ = new HttpClient();
+   }
 }
 
 Engine::~Engine() {
@@ -171,7 +180,7 @@ void Engine::Run() {
             if (cache_->HandleExists(request) == 0) {
                cache_->AddReadRequest(request);
             } else {
-               dns_->AddFetchAAAARequest(request);
+               dns_->AddFetchAAAARequest(request, Engine::UseSSL);
             }
             break;
          case EVENT_TYPE_CACHE_READ:

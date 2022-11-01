@@ -19,7 +19,7 @@ class Dns : public DnsSeeker {
    void AddVerifyUDPRequest();
    int HandleVerifyUDP();
 
-   void AddFetchAAAARequest(struct Request *request);
+   void AddFetchAAAARequest(struct Request *request, bool isHttps);
    int HandleFetchAAAA(struct Request *request);
 
   private:

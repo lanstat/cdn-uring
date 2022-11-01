@@ -236,6 +236,7 @@ void DnsSeeker::parseEvent(const int &event, int socket) {
             if (!read16Bits(questions, buffer, size, pos)) return;
             uint16_t answersIndex = 0;
             uint16_t answers = 0;
+            //TODO(Javier Garson): does not pass the next funct on ssl
             if (!read16Bits(answers, buffer, size, pos)) return;
             if (!canAddToPos(2 + 2, size, pos)) return;
 

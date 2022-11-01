@@ -20,23 +20,23 @@ class Http {
    void SetCache(Cache *cache);
 
    void AddFetchDataRequest(struct Request *req);
-   int HandleFetchData(struct Request *request);
+   virtual int HandleFetchData(struct Request *request) = 0;
    void AddReadRequest(struct Request *request, int fd);
-   int HandleReadData(struct Request *request);
+   virtual int HandleReadData(struct Request *request) = 0;
 
-  private:
+  protected:
    struct HttpRequest {
       struct Request *request;
       std::vector<struct iovec> buffer;
       int size;
    };
 
+   int buffer_size_;
    struct io_uring *ring_;
    Server *server_;
    Cache *cache_;
    std::unordered_map<int, struct HttpRequest *> waiting_read_;
 
-   void Fetch(struct Request *request);
    int GetDataReadedLength(char *src);
    void ReleaseSocket(struct Request *request);
    struct Request *UnifyBuffer(struct Request *request);

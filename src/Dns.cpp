@@ -30,8 +30,8 @@ void Dns::AddVerifyUDPRequest() {
       fprintf(stderr, "clock_gettime CLOCK_REALTIME error: %s\n",
               strerror(errno));
    }
-   // rts.tv_nsec += VERIFY_TIMEOUT;
-   rts.tv_sec += 1;
+   rts.tv_nsec += VERIFY_TIMEOUT;
+   //rts.tv_sec += 1;
    struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
    struct Request *req = (Request *)malloc(sizeof(*req) + sizeof(struct iovec));
    req->event_type = EVENT_TYPE_DNS_VERIFY;
@@ -43,13 +43,14 @@ void Dns::AddVerifyUDPRequest() {
    io_uring_submit(ring_);
 }
 
-void Dns::AddFetchAAAARequest(struct Request *request) {
+void Dns::AddFetchAAAARequest(struct Request *request, bool isHttps) {
    std::string host((char *)request->iov[0].iov_base);
    host = host.substr(1);
    std::size_t pos = host.find("/");
    host = host.substr(0, pos);
+   std::cout<< "LAN_[" << __FILE__ << ":" << __LINE__ << "] "<< host << std::endl;
 
-   GetAAAA((void *)request, host, false);
+   GetAAAA((void *)request, host, isHttps);
 }
 
 int Dns::HandleFetchAAAA(struct Request *request) {
@@ -59,6 +60,7 @@ int Dns::HandleFetchAAAA(struct Request *request) {
 
 void Dns::dnsRight(const std::vector<void *> &requests,
                    const sockaddr_in6 &sIPv6) {
+   std::cout<< "LAN_[" << __FILE__ << ":" << __LINE__ << "] "<< "asdasd" << std::endl;
    unsigned int index = 0;
    while (index < requests.size()) {
       struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);

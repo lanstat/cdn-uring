@@ -25,6 +25,10 @@ void ParserArguments(int argc, char** argv) {
             Log::NoLog = true;
             continue;
         }
+        if (strcmp(argv[i], "-ssl") == 0) {
+            Engine::UseSSL = true;
+            continue;
+        }
     }
 }
 
