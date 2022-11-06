@@ -22,7 +22,6 @@ class Http {
 
    void AddFetchDataRequest(struct Request *req);
    virtual int HandleFetchData(struct Request *request) = 0;
-   void AddReadRequest(struct Request *request, int fd);
    virtual int HandleReadData(struct Request *request) = 0;
 
   protected:
@@ -39,7 +38,7 @@ class Http {
    std::unordered_map<int, struct HttpRequest *> waiting_read_;
 
    int GetDataReadedLength(char *src);
-   void ReleaseSocket(struct Request *request);
+   virtual void ReleaseSocket(struct Request *request) = 0;
    struct Request *UnifyBuffer(struct Request *request);
 };
 #endif

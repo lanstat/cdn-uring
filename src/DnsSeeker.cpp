@@ -597,12 +597,21 @@ bool DnsSeeker::read8Bits(uint8_t &var, const char *const data, const int &size,
     return true;
 }
 
+//bool DnsSeeker::read16Bits(uint16_t &var, const char *const data,
+                           //const int &size, int &pos) {
+    //uint16_t t = 0;
+    //read16BitsRaw(t, data, size, pos);
+    //var = be16toh(t);
+    //return var;
+//}
+
 bool DnsSeeker::read16Bits(uint16_t &var, const char *const data,
                            const int &size, int &pos) {
     uint16_t t = 0;
-    read16BitsRaw(t, data, size, pos);
+    if(!read16BitsRaw(t, data, size, pos))
+        return false;
     var = be16toh(t);
-    return var;
+    return true;
 }
 
 bool DnsSeeker::read16BitsRaw(uint16_t &var, const char *const data,

@@ -200,9 +200,7 @@ void Engine::Run() {
             http_->HandleFetchData(request);
             break;
          case EVENT_TYPE_HTTP_READ:
-            if (http_->HandleReadData(request) != 0) {
-               Utils::ReleaseRequest(request);
-            }
+            http_->HandleReadData(request);
             break;
             /*
             case EVENT_TYPE_CACHE_VERIFY:

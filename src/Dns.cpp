@@ -60,7 +60,6 @@ int Dns::HandleFetchAAAA(struct Request *request) {
 
 void Dns::dnsRight(const std::vector<void *> &requests,
                    const sockaddr_in6 &sIPv6) {
-   std::cout<< "LAN_[" << __FILE__ << ":" << __LINE__ << "] "<< "asdasd" << std::endl;
    unsigned int index = 0;
    while (index < requests.size()) {
       struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
