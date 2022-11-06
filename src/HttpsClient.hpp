@@ -27,6 +27,6 @@ class HttpsClient : public Http {
 
   protected:
    void ReleaseSocket(struct Request *request) override;
-   bool ProcessError(SSL *ssl, int error);
+   bool ProcessError(SSL *ssl, int last_error);
 };
 #endif

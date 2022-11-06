@@ -32,6 +32,8 @@ class Cache {
   void AddWriteRequest(struct Request *request);
   int HandleWrite(struct Request *request);
 
+  void ReleaseAllWaitingRequest(struct Request *request, int status_code);
+
  private:
   struct File {
     void *data;
@@ -47,6 +49,5 @@ class Cache {
 
   void AddCopyRequest(struct Request *request, File *file);
   void StoreFileInMemory(struct Request *request);
-  void ReleaseAllWaitingRequest(struct Request *request, int status_code);
 };
 #endif

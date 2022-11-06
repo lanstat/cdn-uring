@@ -18,8 +18,6 @@ Http::~Http() {}
 
 void Http::SetRing(struct io_uring *ring) { ring_ = ring; }
 
-void Http::SetServer(Server *server) { server_ = server; }
-
 void Http::SetCache(Cache *cache) { cache_ = cache; }
 
 void Http::AddFetchDataRequest(struct Request *req) {}

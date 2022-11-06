@@ -30,7 +30,7 @@ int HttpsClient::HandleFetchData(struct Request *request) {
    SSL_CTX *ctx = SSL_CTX_new(method);
    if (!ctx) {
       Log(__FILE__, __LINE__, Log::kError) << "Error creating context ssl";
-      server_->AddHttpErrorRequest(request->client_socket, 502);
+      cache_->ReleaseAllWaitingRequest(request, 502);
       Utils::ReleaseRequest(request);
       return 1;
    }
@@ -39,7 +39,8 @@ int HttpsClient::HandleFetchData(struct Request *request) {
    if (!ssl) {
       CloseSSL(-1, nullptr, ctx);
       Log(__FILE__, __LINE__, Log::kError) << "Error creating ssl";
-      server_->AddHttpErrorRequest(request->client_socket, 502);
+      cache_->ReleaseAllWaitingRequest(request, 502);
+      cache_->ReleaseAllWaitingRequest(request, 502);
       Utils::ReleaseRequest(request);
       return -1;
    }
@@ -48,7 +49,7 @@ int HttpsClient::HandleFetchData(struct Request *request) {
    if (socket_fd < 0) {
       CloseSSL(-1, ssl, ctx);
       Log(__FILE__, __LINE__, Log::kError) << "Error creating socket";
-      server_->AddHttpErrorRequest(request->client_socket, 502);
+      cache_->ReleaseAllWaitingRequest(request, 502);
       Utils::ReleaseRequest(request);
       return 1;
    }
@@ -57,7 +58,7 @@ int HttpsClient::HandleFetchData(struct Request *request) {
                sizeof(struct sockaddr_in6)) < 0) {
       CloseSSL(socket_fd, ssl, ctx);
       Log(__FILE__, __LINE__, Log::kError) << "Could not connect ";
-      server_->AddHttpErrorRequest(request->client_socket, 502);
+      cache_->ReleaseAllWaitingRequest(request, 502);
       Utils::ReleaseRequest(request);
       return 1;
    }
@@ -67,13 +68,13 @@ int HttpsClient::HandleFetchData(struct Request *request) {
    if (err < 1) {
       CloseSSL(socket_fd, ssl, ctx);
       Log(__FILE__, __LINE__, Log::kError) << "Could not connect ";
-      server_->AddHttpErrorRequest(request->client_socket, 502);
+      cache_->ReleaseAllWaitingRequest(request, 502);
       Utils::ReleaseRequest(request);
       return 1;
    }
 
    std::stringstream ss;
-   ss << "GET " << query << " HTTP/1.1\r\n"
+   ss << "GET " << query << " HTTP/1.2\r\n"
       << "Host: " << host << "\r\n"
       << "Accept: */*\r\n"
       << "Connection: close\r\n"
@@ -83,7 +84,7 @@ int HttpsClient::HandleFetchData(struct Request *request) {
    if (SSL_write(ssl, request_data.c_str(), request_data.length()) < 0) {
       CloseSSL(socket_fd, ssl, ctx);
       Log(__FILE__, __LINE__, Log::kError) << "invalid socket";
-      server_->AddHttpErrorRequest(request->client_socket, 502);
+      cache_->ReleaseAllWaitingRequest(request, 502);
       Utils::ReleaseRequest(request);
       return 1;
    }
@@ -124,7 +125,7 @@ int HttpsClient::HandleReadData(struct Request *request) {
       if (!ProcessError(ssl, err)) {
          struct HttpRequest *http_request =
              waiting_read_.at(request->client_socket);
-         server_->AddHttpErrorRequest(http_request->request->client_socket, 502);
+         cache_->ReleaseAllWaitingRequest(http_request->request, 502);
          ReleaseSocket(request);
          return 1;
       }
@@ -189,15 +190,17 @@ void HttpsClient::ReleaseSocket(struct Request *request) {
    free(request);
 }
 
-bool HttpsClient::ProcessError(SSL *ssl, int error) {
-   error = SSL_get_error(ssl, error);
-   Log(__FILE__, __LINE__, Log::kWarning) << "ssl error " << error;
+bool HttpsClient::ProcessError(SSL *ssl, int last_error) {
+   int error = SSL_get_error(ssl, last_error);
+   Log(__FILE__, __LINE__, Log::kWarning) << "SSL error " << error;
    if (error == SSL_ERROR_NONE) {
+      if (last_error == SSL_ERROR_SYSCALL) {
+         return false;
+      }
       return true;
    } else if (error == SSL_ERROR_ZERO_RETURN) {
       SSL_shutdown(ssl);
    } else if (error == SSL_ERROR_SYSCALL) {
-      //ERR_clear_error();
       return ProcessError(ssl, error);
    }
    return false;

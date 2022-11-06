@@ -31,15 +31,18 @@ void Cache::AddExistsRequest(struct Request *request) {
 
    // In the case of the file is cached
    if (files_.find(path) != files_.cend()) {
+      Log(__FILE__, __LINE__) << "Reading from cache";
       struct File file = files_.at(path);
       AddCopyRequest(request, &file);
       return;
    } else {
       // If there is other request fetching the file wait until finished
       if (waiting_read_.find(path) != waiting_read_.cend()) {
+         Log(__FILE__, __LINE__) << "Waiting cache";
          waiting_read_.at(path).push_back(request);
          return;
       }
+      Log(__FILE__, __LINE__) << "Fetching cache";
       std::vector<struct Request *> requests;
       std::pair<std::string, std::vector<struct Request *>> item(path,
                                                                  requests);

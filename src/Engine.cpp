@@ -140,7 +140,6 @@ void Engine::Run() {
    dns_->SetRing(&ring_);
 
    http_->SetRing(&ring_);
-   http_->SetServer(server_);
    http_->SetCache(cache_);
 
    AddAcceptRequest(socket_, &client_addr, &client_addr_len);
@@ -161,6 +160,7 @@ void Engine::Run() {
       switch (request->event_type) {
          case EVENT_TYPE_ACCEPT:
             Utils::ReleaseRequest(request);
+            Log(__FILE__, __LINE__) << "Accept http request";
 
             AddAcceptRequest(socket_, &client_addr, &client_addr_len);
             server_->AddReadRequest(cqe->res);
@@ -174,7 +174,7 @@ void Engine::Run() {
          } break;
          case EVENT_TYPE_SERVER_WRITE:
             server_->HandleWrite(request);
-            Log(__FILE__, __LINE__) << "close socket";
+            Log(__FILE__, __LINE__) << "Close http request";
             break;
          case EVENT_TYPE_CACHE_EXISTS:
             if (cache_->HandleExists(request) == 0) {

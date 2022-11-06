@@ -4,3 +4,5 @@ clang
 %h c++-header
 
 -Iluring
+-Ilssl
+-Ilcrypto

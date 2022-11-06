@@ -33,7 +33,6 @@ class Http {
 
    int buffer_size_;
    struct io_uring *ring_;
-   Server *server_;
    Cache *cache_;
    std::unordered_map<int, struct HttpRequest *> waiting_read_;
 
