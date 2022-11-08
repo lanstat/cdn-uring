@@ -17,7 +17,7 @@ Dns::~Dns() {}
 void Dns::SetRing(struct io_uring *ring) { ring_ = ring; }
 
 int Dns::HandleVerifyUDP() {
-   // checkQueries();
+   //checkQueries();
    parseEvent(1, IPv4Socket);
    parseEvent(1, IPv6Socket);
    return 0;
@@ -31,12 +31,12 @@ void Dns::AddVerifyUDPRequest() {
               strerror(errno));
    }
    rts.tv_nsec += VERIFY_TIMEOUT;
-   //rts.tv_sec += 1;
-   struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
+   //rts.tv_sec += 5;
    struct Request *req = (Request *)malloc(sizeof(*req) + sizeof(struct iovec));
    req->event_type = EVENT_TYPE_DNS_VERIFY;
    req->iovec_count = 0;
 
+   struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
    io_uring_prep_timeout(sqe, (struct __kernel_timespec *)&rts, 1,
                          IORING_TIMEOUT_ABS);
    io_uring_sqe_set_data(sqe, req);
@@ -62,7 +62,7 @@ void Dns::dnsRight(const std::vector<void *> &requests,
                    const sockaddr_in6 &sIPv6) {
    unsigned int index = 0;
    while (index < requests.size()) {
-      struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
+      /*
       struct Request *request = (Request *)requests.at(index);
       size_t size = sizeof(sockaddr_in6);
       request->iov[4].iov_base = malloc(size);
@@ -70,26 +70,29 @@ void Dns::dnsRight(const std::vector<void *> &requests,
       memcpy(request->iov[4].iov_base, &sIPv6, size);
       request->event_type = EVENT_TYPE_HTTP_FETCH;
 
+      struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
       io_uring_prep_nop(sqe);
       io_uring_sqe_set_data(sqe, request);
       io_uring_submit(ring_);
+      */
+      dnsRight(requests.at(index), sIPv6);
 
       index++;
    }
 }
 
-void Dns::dnsRight(void *request, const sockaddr_in6 &sIPv6) {
-   /*
-      struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
-      struct Request *request = (Request *)requests.at(index);
-      size_t size = sizeof(sockaddr_in6);
-      request->iov[4].iov_base = malloc(size);
-      request->iov[4].iov_len = size;
-      memcpy(request->iov[4].iov_base, &sIPv6, size);
+void Dns::dnsRight(void *record, const sockaddr_in6 &sIPv6) {
+   struct Request *request = (Request *)record;
+   size_t size = sizeof(sockaddr_in6);
+   request->iov[4].iov_base = malloc(size);
+   request->iov[4].iov_len = size;
+   memcpy(request->iov[4].iov_base, &sIPv6, size);
+   request->event_type = EVENT_TYPE_HTTP_FETCH;
 
-      io_uring_sqe_set_data(sqe, request);
-      io_uring_submit(ring_);
-      */
+   struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
+   io_uring_prep_nop(sqe);
+   io_uring_sqe_set_data(sqe, request);
+   io_uring_submit(ring_);
 }
 
 void Dns::dnsError() { Log(__FILE__, __LINE__, Log::kError) << "dns error"; }
