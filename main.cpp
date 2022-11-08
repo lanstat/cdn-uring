@@ -7,7 +7,6 @@
 #include "src/Logger.hpp"
 #include "src/Settings.hpp"
 
-#define DEFAULT_SERVER_PORT 8000
 #define QUEUE_DEPTH 512
 
 Engine* engine_ = nullptr;
@@ -37,6 +36,11 @@ void ParserArguments(int argc, char** argv) {
             Settings::HttpBufferSize = stoi(tmp.substr(13));
             continue;
         }
+        if (memcmp(argv[i], "-server-port=", 13) == 0) {
+            std::string tmp(argv[i]);
+            Settings::ServerPort = stoi(tmp.substr(13));
+            continue;
+        }
     }
 }
 
@@ -51,10 +55,10 @@ int main(int argc, char** argv) {
     }
 
     engine_ = new Engine();
-    engine_->SetupListeningSocket(DEFAULT_SERVER_PORT);
+    engine_->SetupListeningSocket(Settings::ServerPort);
 
     Log(__FILE__, __LINE__)
-        << "Started server on localhost:" << DEFAULT_SERVER_PORT;
+        << "Started server on localhost:" << Settings::ServerPort;
 
     signal(SIGINT, SigIntHandler);
     io_uring_queue_init(QUEUE_DEPTH, &engine_->ring_, 0);
