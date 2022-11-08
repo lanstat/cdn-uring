@@ -6,9 +6,9 @@ first: all
 all: cdn
 
 cdn: main.o
-	$(CC) $(CFLAGS) -o cdn main.o Engine.o Http.o Cache.o Server.o Dns.o Utils.o DnsSeeker.o Logger.o HttpClient.o HttpsClient.o
+	$(CC) $(CFLAGS) -o cdn main.o Engine.o Http.o Cache.o Server.o Dns.o Utils.o DnsSeeker.o Logger.o HttpClient.o HttpsClient.o Settings.o
 
-main.o: Cache.o Http.o Engine.o Server.o Dns.o Utils.o DnsSeeker.o Logger.o HttpClient.o HttpsClient.o
+main.o: Cache.o Http.o Engine.o Server.o Dns.o Utils.o DnsSeeker.o Logger.o HttpClient.o HttpsClient.o Settings.o
 	$(CC) $(CFLAGS) -c ./main.cpp
 
 test: main-test.o
@@ -46,6 +46,9 @@ Utils.o: ./src/Utils.hpp
 
 Logger.o: ./src/Logger.hpp
 	$(CC) $(CFLAGS) -c ./src/Logger.cpp
+
+Settings.o: ./src/Settings.hpp
+	$(CC) $(CFLAGS) -c ./src/Settings.cpp
 
 clean:
 	rm -f cdn test

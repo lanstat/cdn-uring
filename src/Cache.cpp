@@ -5,11 +5,10 @@
 #include "EventType.hpp"
 #include "Logger.hpp"
 #include "Utils.hpp"
+#include "Settings.hpp"
 #include "xxhash64.h"
 
 #define INVALID_FILE 13816973012072644543ULL
-
-std::string Cache::CacheDir = "";
 
 Cache::Cache() { server_ = nullptr; }
 
@@ -21,7 +20,7 @@ std::string Cache::GetUID(char *url) {
    std::string aux(url);
    auto uid = XXHash64::hash(url, aux.length(), 0);
    std::string uri;
-   uri.append(CacheDir);
+   uri.append(Settings::CacheDir);
    uri.append(std::to_string(uid));
    return uri;
 }

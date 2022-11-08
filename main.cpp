@@ -4,7 +4,7 @@
 #include <filesystem>
 
 #include "src/Engine.hpp"
-#include "src/Cache.hpp"
+#include "src/Settings.hpp"
 #include "src/Logger.hpp"
 
 #define DEFAULT_SERVER_PORT 8000
@@ -29,7 +29,12 @@ void ParserArguments(int argc, char** argv) {
             continue;
         }
         if (strcmp(argv[i], "-ssl") == 0) {
-            Engine::UseSSL = true;
+            Settings::UseSSL = true;
+            continue;
+        }
+        if (memcmp(argv[i], "-buffer-size=", 13) == 0) {
+            std::string tmp(argv[i]);
+            Settings::HttpBufferSize = stoi(tmp.substr(13));
             continue;
         }
     }
@@ -39,7 +44,7 @@ int main(int argc, char** argv) {
     ParserArguments(argc, argv);
 
     std::filesystem::path cwd = std::filesystem::current_path() / "cache/" ;
-    Cache::CacheDir = cwd.string();
+    Settings::CacheDir = cwd.string();
 
     engine_ = new Engine();
     engine_->SetupListeningSocket(DEFAULT_SERVER_PORT);

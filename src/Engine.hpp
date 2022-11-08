@@ -27,7 +27,6 @@ class Engine {
    void SetupListeningSocket(int port);
    void Run();
    struct io_uring ring_;
-   static bool UseSSL;
 
   private:
    int socket_;

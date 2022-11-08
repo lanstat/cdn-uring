@@ -15,8 +15,6 @@ class Cache {
  public:
   Cache();
 
-  static std::string CacheDir;
-
   void SetRing(struct io_uring *ring);
   void SetServer(Server *server);
 

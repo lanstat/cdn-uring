@@ -36,8 +36,12 @@ class Http {
    Cache *cache_;
    std::unordered_map<int, struct HttpRequest *> waiting_read_;
 
-   int GetDataReadedLength(char *src);
+   int GetDataReadedLength(void *src, void *is_header);
    virtual void ReleaseSocket(struct Request *request) = 0;
    struct Request *UnifyBuffer(struct Request *request);
+
+  private:
+   void *one_;
+   void *zero_;
 };
 #endif
