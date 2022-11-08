@@ -4,8 +4,8 @@
 #include <filesystem>
 
 #include "src/Engine.hpp"
-#include "src/Settings.hpp"
 #include "src/Logger.hpp"
+#include "src/Settings.hpp"
 
 #define DEFAULT_SERVER_PORT 8000
 #define QUEUE_DEPTH 512
@@ -43,8 +43,12 @@ void ParserArguments(int argc, char** argv) {
 int main(int argc, char** argv) {
     ParserArguments(argc, argv);
 
-    std::filesystem::path cwd = std::filesystem::current_path() / "cache/" ;
+    std::filesystem::path cwd = std::filesystem::current_path() / "cache/";
     Settings::CacheDir = cwd.string();
+    if (!std::filesystem::is_directory(Settings::CacheDir) ||
+        !std::filesystem::exists(Settings::CacheDir)) {
+        std::filesystem::create_directory(Settings::CacheDir);
+    }
 
     engine_ = new Engine();
     engine_->SetupListeningSocket(DEFAULT_SERVER_PORT);

@@ -46,7 +46,7 @@ void Log::PrintHeader() {
    std::cout << currentDateTime();
    switch (mode_) {
       case kDebug:
-         std::cout << " \033[1;34mDEBUG\033[0m   ";
+         std::cout << " \033[1;34mDEBUG\033[0m   " << file_ << ":" << line_ << " ";
          break;
       case kInfo:
          std::cout << " \033[1;36mINFO\033[0m    ";
@@ -58,7 +58,6 @@ void Log::PrintHeader() {
          std::cout << " \033[1;33mWARNING\033[0m ";
          break;
    }
-   std::cout << file_ << ":" << line_ << " ";
 }
 
 Log &Log::operator<<(int t) {
