@@ -2,8 +2,8 @@
 
 #include <arpa/inet.h>
 
-#include <sstream>
 #include <cstring>
+#include <sstream>
 
 #include "EventType.hpp"
 #include "Logger.hpp"
@@ -62,7 +62,8 @@ int HttpClient::HandleFetchData(struct Request *request) {
 }
 
 int HttpClient::HandleReadData(struct Request *request) {
-   int readed = GetDataReadedLength(request->iov[0].iov_base, request->iov[1].iov_base);
+   struct HttpRequest *http_request = waiting_read_.at(request->client_socket);
+   int readed = GetDataReadedLength(request->iov[0].iov_base, http_request);
 
    if (readed <= 0) {
       struct Request *client_request = UnifyBuffer(request);
@@ -70,8 +71,6 @@ int HttpClient::HandleReadData(struct Request *request) {
       cache_->AddWriteRequest(client_request);
       return 1;
    } else {
-      struct HttpRequest *http_request =
-          waiting_read_.at(request->client_socket);
       struct iovec data;
       data.iov_base = malloc(readed);
       data.iov_len = readed;
@@ -99,16 +98,12 @@ void HttpClient::AddReadRequest(struct Request *request, int fd) {
    std::pair<int, struct HttpRequest *> item(fd, http_request);
    waiting_read_.insert(item);
 
-   struct Request *auxiliar = Utils::CreateRequest(2);
+   struct Request *auxiliar = Utils::CreateRequest(1);
    auxiliar->event_type = EVENT_TYPE_HTTP_READ;
    auxiliar->client_socket = fd;
    auxiliar->iov[0].iov_base = malloc(buffer_size_);
    auxiliar->iov[0].iov_len = buffer_size_;
    memset(auxiliar->iov[0].iov_base, 0, buffer_size_);
-
-   auxiliar->iov[1].iov_base = malloc(1);
-   auxiliar->iov[1].iov_len = 1;
-   memset(auxiliar->iov[1].iov_base, 1, 1);
 
    io_uring_prep_readv(sqe, fd, &auxiliar->iov[0], 1, 0);
    io_uring_sqe_set_data(sqe, auxiliar);
@@ -121,7 +116,8 @@ void HttpClient::ReleaseSocket(struct Request *request) {
    waiting_read_.erase(request->client_socket);
    Utils::ReleaseRequest(request);
 
-   for (auto it = begin(http_request->buffer); it != end(http_request->buffer); ++it) {
+   for (auto it = begin(http_request->buffer); it != end(http_request->buffer);
+        ++it) {
       free(it->iov_base);
    }
 

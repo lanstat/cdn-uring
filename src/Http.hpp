@@ -12,36 +12,38 @@
 #include "Server.hpp"
 
 class Http {
-  public:
-   Http();
-   virtual ~Http();
+ public:
+  Http();
+  virtual ~Http();
 
-   void SetRing(struct io_uring *ring);
-   void SetServer(Server *server);
-   void SetCache(Cache *cache);
+  void SetRing(struct io_uring *ring);
+  void SetServer(Server *server);
+  void SetCache(Cache *cache);
 
-   void AddFetchDataRequest(struct Request *req);
-   virtual int HandleFetchData(struct Request *request) = 0;
-   virtual int HandleReadData(struct Request *request) = 0;
+  void AddFetchDataRequest(struct Request *req);
+  virtual int HandleFetchData(struct Request *request) = 0;
+  virtual int HandleReadData(struct Request *request) = 0;
 
-  protected:
-   struct HttpRequest {
-      struct Request *request;
-      std::vector<struct iovec> buffer;
-      int size;
-   };
+ protected:
+  struct HttpRequest {
+    struct Request *request;
+    std::vector<struct iovec> buffer;
+    int size;
+    int header_size;
+  };
 
-   int buffer_size_;
-   struct io_uring *ring_;
-   Cache *cache_;
-   std::unordered_map<int, struct HttpRequest *> waiting_read_;
+  int buffer_size_;
+  struct io_uring *ring_;
+  Cache *cache_;
+  std::unordered_map<int, struct HttpRequest *> waiting_read_;
 
-   int GetDataReadedLength(void *src, void *is_header);
-   virtual void ReleaseSocket(struct Request *request) = 0;
-   struct Request *UnifyBuffer(struct Request *request);
+  int GetDataReadedLength(void *src, struct HttpRequest *request);
+  virtual void ReleaseSocket(struct Request *request) = 0;
+  struct Request *UnifyBuffer(struct Request *request);
 
-  private:
-   void *one_;
-   void *zero_;
+ private:
+  void *zero_;
+
+  std::string CreateHeader(char *prev_header);
 };
 #endif

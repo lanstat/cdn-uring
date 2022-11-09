@@ -103,7 +103,7 @@ void HttpsClient::AddReadRequest(struct Request *request, SSL *ssl,
    std::pair<int, struct HttpRequest *> item(fd, http_request);
    waiting_read_.insert(item);
 
-   struct Request *auxiliar = Utils::CreateRequest(4);
+   struct Request *auxiliar = Utils::CreateRequest(3);
    auxiliar->event_type = EVENT_TYPE_HTTP_READ;
    auxiliar->client_socket = fd;
    auxiliar->iov[0].iov_base = malloc(buffer_size_);
@@ -111,11 +111,7 @@ void HttpsClient::AddReadRequest(struct Request *request, SSL *ssl,
    auxiliar->iov[1].iov_base = ssl;
    auxiliar->iov[2].iov_base = context;
 
-   auxiliar->iov[3].iov_base = malloc(1);
-   auxiliar->iov[3].iov_len = 1;
-
    memset(auxiliar->iov[0].iov_base, 0, buffer_size_);
-   memset(auxiliar->iov[3].iov_base, 1, 1);
 
    io_uring_prep_nop(sqe);
    io_uring_sqe_set_data(sqe, auxiliar);
@@ -135,7 +131,8 @@ int HttpsClient::HandleReadData(struct Request *request) {
       }
    }
 
-   int readed = GetDataReadedLength(request->iov[0].iov_base, request->iov[3].iov_base);
+   struct HttpRequest *http_request = waiting_read_.at(request->client_socket);
+   int readed = GetDataReadedLength(request->iov[0].iov_base, http_request);
    Log(__FILE__, __LINE__, Log::kDebug) << "bytes readed: " << readed;
    if (readed <= 0) {
       struct Request *client_request = UnifyBuffer(request);
@@ -143,8 +140,6 @@ int HttpsClient::HandleReadData(struct Request *request) {
       cache_->AddWriteRequest(client_request);
       return 1;
    } else {
-      struct HttpRequest *http_request =
-          waiting_read_.at(request->client_socket);
       struct iovec data;
       data.iov_base = malloc(readed);
       data.iov_len = readed;
@@ -182,7 +177,6 @@ void HttpsClient::ReleaseSocket(struct Request *request) {
    free(request->iov[0].iov_base);
    SSL *ssl = (SSL *)request->iov[1].iov_base;
    SSL_CTX *context = (SSL_CTX *)request->iov[2].iov_base;
-   free(request->iov[3].iov_base);
 
    CloseSSL(request->client_socket, ssl, context);
 
@@ -199,8 +193,8 @@ bool HttpsClient::ProcessError(SSL *ssl, int last_error) {
    int error = SSL_get_error(ssl, last_error);
    Log(__FILE__, __LINE__, Log::kWarning) << "SSL error " << error;
    if (error == SSL_ERROR_NONE) {
-      //if (last_error == SSL_ERROR_SYSCALL) {
-         //return false;
+      // if (last_error == SSL_ERROR_SYSCALL) {
+      // return false;
       //}
       return true;
    } else if (error == SSL_ERROR_ZERO_RETURN) {
