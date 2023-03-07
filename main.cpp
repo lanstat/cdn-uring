@@ -41,6 +41,10 @@ void ParserArguments(int argc, char** argv) {
             Settings::ServerPort = stoi(tmp.substr(13));
             continue;
         }
+        if (strcmp(argv[i], "-no-cache") == 0) {
+            Settings::UseCache = false;
+            continue;
+        }
     }
 }
 

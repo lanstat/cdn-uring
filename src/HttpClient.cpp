@@ -27,7 +27,7 @@ int HttpClient::HandleFetchData(struct Request *request) {
    if (sock < 0) {
       Log(__FILE__, __LINE__, Log::kError) << "Error creating socket";
 
-      cache_->ReleaseAllWaitingRequest(request, 502);
+      cache_->ReleaseErrorAllWaitingRequest(request, 502);
       Utils::ReleaseRequest(request);
       return 1;
    }
@@ -36,7 +36,7 @@ int HttpClient::HandleFetchData(struct Request *request) {
        0) {
       close(sock);
       Log(__FILE__, __LINE__, Log::kError) << "Could not connect ";
-      cache_->ReleaseAllWaitingRequest(request, 502);
+      cache_->ReleaseErrorAllWaitingRequest(request, 502);
       Utils::ReleaseRequest(request);
       return 1;
    }
@@ -52,7 +52,7 @@ int HttpClient::HandleFetchData(struct Request *request) {
    if (send(sock, request_data.c_str(), request_data.length(), 0) !=
        (int)request_data.length()) {
       Log(__FILE__, __LINE__, Log::kError) << "invalid socket";
-      cache_->ReleaseAllWaitingRequest(request, 502);
+      cache_->ReleaseErrorAllWaitingRequest(request, 502);
       Utils::ReleaseRequest(request);
       return 1;
    }

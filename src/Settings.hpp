@@ -9,5 +9,6 @@ class Settings {
    static int HttpBufferSize;
    static int ServerPort;
    static std::string CacheDir;
+   static bool UseCache;
 };
 #endif

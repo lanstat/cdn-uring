@@ -1,17 +1,17 @@
 #include "Engine.hpp"
 
 #include "EventType.hpp"
-#include "Logger.hpp"
-#include "Utils.hpp"
-#include "Settings.hpp"
 #include "HttpClient.hpp"
 #include "HttpsClient.hpp"
+#include "Logger.hpp"
+#include "Settings.hpp"
+#include "Utils.hpp"
 
 #define READ_SZ 8192
 
 void PrintRequestType(int type) {
    std::string type_str;
-   switch(type) {
+   switch (type) {
       case EVENT_TYPE_ACCEPT:
          type_str = "EVENT_TYPE_ACCEPT";
          break;
@@ -46,7 +46,7 @@ void PrintRequestType(int type) {
          type_str = "EVENT_TYPE_CACHE_WRITE";
          break;
    }
-   Log(__FILE__, __LINE__, Log::kDebug) <<  type_str;
+   Log(__FILE__, __LINE__, Log::kDebug) << type_str;
 }
 
 Engine::Engine() {
