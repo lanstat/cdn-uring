@@ -14,7 +14,7 @@ HttpsClient::HttpsClient() : Http() {
    OPENSSL_init_ssl(OPENSSL_INIT_LOAD_SSL_STRINGS, NULL);
 }
 
-int HttpsClient::HandleFetchData(struct Request *request) {
+int HttpsClient::HandleFetchData(struct Request *request, bool ipv4) {
    std::string url((char *)request->iov[0].iov_base);
    url = url.substr(1);
    std::size_t pos = url.find("/");
@@ -97,12 +97,11 @@ void HttpsClient::AddReadRequest(struct Request *request, SSL *ssl,
    struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
 
    struct HttpRequest *http_request = new HttpRequest();
-   http_request->request = request;
-   http_request->size = 0;
+   http_request->has_header = 0;
    std::pair<int, struct HttpRequest *> item(fd, http_request);
    waiting_read_.insert(item);
 
-   struct Request *auxiliar = Utils::CreateRequest(3);
+   struct Request *auxiliar = Utils::HttpsExternalRequest();
    auxiliar->event_type = EVENT_TYPE_HTTP_READ;
    auxiliar->client_socket = fd;
    auxiliar->iov[0].iov_base = malloc(buffer_size_);
@@ -117,21 +116,22 @@ void HttpsClient::AddReadRequest(struct Request *request, SSL *ssl,
    io_uring_submit(ring_);
 }
 
-int HttpsClient::HandleReadData(struct Request *request) {
+int HttpsClient::HandleReadData(struct Request *request, int response) {
    SSL *ssl = (SSL *)request->iov[1].iov_base;
    int err = SSL_read(ssl, request->iov[0].iov_base, buffer_size_);
    if (err < 1) {
       if (!ProcessError(ssl, err)) {
          struct HttpRequest *http_request =
              waiting_read_.at(request->client_socket);
-         cache_->ReleaseErrorAllWaitingRequest(http_request->request, 502);
+         //TODO(lanstat): verify when is finished
+         //cache_->ReleaseErrorAllWaitingRequest(http_request->request, 502);
          ReleaseSocket(request);
          return 1;
       }
    }
 
    struct HttpRequest *http_request = waiting_read_.at(request->client_socket);
-   int readed = GetDataReadedLength(request->iov[0].iov_base, http_request);
+   int readed = FetchHeader(request->iov[0].iov_base);
    Log(__FILE__, __LINE__, Log::kDebug) << "bytes readed: " << readed;
    if (readed <= 0) {
       struct Request *client_request = UnifyBuffer(request);
@@ -143,8 +143,6 @@ int HttpsClient::HandleReadData(struct Request *request) {
       data.iov_base = malloc(readed);
       data.iov_len = readed;
       memcpy(data.iov_base, request->iov[0].iov_base, readed);
-      http_request->buffer.push_back(data);
-      http_request->size += readed;
    }
 
    memset(request->iov[0].iov_base, 0, buffer_size_);
@@ -178,11 +176,6 @@ void HttpsClient::ReleaseSocket(struct Request *request) {
    SSL_CTX *context = (SSL_CTX *)request->iov[2].iov_base;
 
    CloseSSL(request->client_socket, ssl, context);
-
-   for (auto it = begin(http_request->buffer); it != end(http_request->buffer);
-        ++it) {
-      free(it->iov_base);
-   }
 
    delete http_request;
    free(request);

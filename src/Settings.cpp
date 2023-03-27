@@ -2,7 +2,7 @@
 
 bool Settings::UseSSL = false;
 
-int Settings::HttpBufferSize = 1024;
+int Settings::HttpBufferSize = 102400;
 
 std::string Settings::CacheDir = "";
 

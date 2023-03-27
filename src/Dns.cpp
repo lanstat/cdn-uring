@@ -48,7 +48,21 @@ void Dns::AddFetchAAAARequest(struct Request *request, bool isHttps) {
    host = host.substr(1);
    std::size_t pos = host.find("/");
    host = host.substr(0, pos);
-   std::cout<< "LAN_[" << __FILE__ << ":" << __LINE__ << "] "<< host << std::endl;
+   pos = host.find(":");
+   if (pos >= 0) {
+      // TODO Eliminar
+      struct sockaddr_in socket;
+      socket.sin_port = htons(7922);
+      socket.sin_family = AF_INET;
+
+      //if (inet_pton(AF_INET, "200.58.170.69", &socket.sin_addr) <= 0) {
+      if (inet_pton(AF_INET, "45.43.200.18", &socket.sin_addr) <= 0) {
+         std::cout<< "LAN_[" << __FILE__ << ":" << __LINE__ << "] "<< "no obtuvo tons" << std::endl;
+      }
+
+      dnsRight((void *)request, socket);
+      return;
+   }
 
    GetAAAA((void *)request, host, isHttps);
 }
@@ -88,6 +102,24 @@ void Dns::dnsRight(void *record, const sockaddr_in6 &sIPv6) {
    request->iov[4].iov_len = size;
    memcpy(request->iov[4].iov_base, &sIPv6, size);
    request->event_type = EVENT_TYPE_HTTP_FETCH;
+
+   struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
+   io_uring_prep_nop(sqe);
+   io_uring_sqe_set_data(sqe, request);
+   io_uring_submit(ring_);
+}
+
+void Dns::dnsRight(const std::vector<void *> &requests, const sockaddr_in &socket_v4) {
+
+}
+
+void Dns::dnsRight(void * record, const sockaddr_in &socket_v4){
+   struct Request *request = (Request *)record;
+   size_t size = sizeof(sockaddr_in);
+   request->iov[4].iov_base = malloc(size);
+   request->iov[4].iov_len = size;
+   memcpy(request->iov[4].iov_base, &socket_v4, size);
+   request->event_type = EVENT_TYPE_HTTP_FETCH_IPV4;
 
    struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
    io_uring_prep_nop(sqe);

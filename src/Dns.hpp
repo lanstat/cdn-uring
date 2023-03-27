@@ -29,6 +29,8 @@ class Dns : public DnsSeeker {
    void dnsRight(const std::vector<void *> &requests,
                  const sockaddr_in6 &sIPv6) override;
    void dnsRight(void *request, const sockaddr_in6 &sIPv6) override;
+   void dnsRight(const std::vector<void *> &requests, const sockaddr_in &socket_v4) override;
+   void dnsRight(void * request, const sockaddr_in &socket_v4) override;
    void dnsError() override;
    void dnsWrong() override;
 };

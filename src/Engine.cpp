@@ -24,6 +24,9 @@ void PrintRequestType(int type) {
       case EVENT_TYPE_HTTP_FETCH:
          type_str = "EVENT_TYPE_HTTP_FETCH";
          break;
+      case EVENT_TYPE_HTTP_FETCH_IPV4:
+         type_str = "EVENT_TYPE_HTTP_FETCH_IPV4";
+         break;
       case EVENT_TYPE_HTTP_READ:
          type_str = "EVENT_TYPE_HTTP_READ";
          break;
@@ -44,6 +47,12 @@ void PrintRequestType(int type) {
          break;
       case EVENT_TYPE_CACHE_WRITE:
          type_str = "EVENT_TYPE_CACHE_WRITE";
+         break;
+      case EVENT_TYPE_CACHE_WRITE_STREAM:
+         type_str = "EVENT_TYPE_CACHE_WRITE_STREAM";
+         break;
+      case EVENT_TYPE_SERVER_WRITE_STREAM:
+         type_str = "EVENT_TYPE_SERVER_WRITE_STREAM";
          break;
    }
    Log(__FILE__, __LINE__, Log::kDebug) << type_str;
@@ -151,6 +160,7 @@ void Engine::Run() {
          FatalError("io_uring_wait_cqe");
       }
       struct Request *request = (struct Request *)cqe->user_data;
+      int response = (int)cqe->res;
 
       if (request->event_type != EVENT_TYPE_DNS_VERIFY) {
          PrintRequestType(request->event_type);
@@ -165,15 +175,24 @@ void Engine::Run() {
             server_->AddReadRequest(cqe->res);
             break;
          case EVENT_TYPE_SERVER_READ: {
-            auto inner_request = Utils::CreateRequest(5);
+            auto inner_request = Utils::HttpInnerRequest();
 
             if (server_->HandleRead(request, inner_request)) {
                cache_->AddExistsRequest(inner_request);
             }
          } break;
          case EVENT_TYPE_SERVER_WRITE:
-            server_->HandleWrite(request);
-            Log(__FILE__, __LINE__) << "Close http request";
+            server_->HandleWrite(request, response);
+         case EVENT_TYPE_SERVER_WRITE_STREAM:
+            // If failed to write to socket
+            if (server_->HandleWriteStream(request, response) == 1) {
+               cache_->RemoveRequest(request);
+               Utils::ReleaseRequest(request);
+               Log(__FILE__, __LINE__) << "Remove close";
+            }
+            break;
+         case EVENT_TYPE_SERVER_CLOSE:
+            server_->HandleClose(request);
             break;
          case EVENT_TYPE_CACHE_EXISTS:
             if (cache_->HandleExists(request) == 0) {
@@ -184,11 +203,14 @@ void Engine::Run() {
             break;
          case EVENT_TYPE_CACHE_READ:
             cache_->HandleRead(request);
-            server_->AddWriteRequest(request);
+            server_->AddWriteRequest(request, false);
             break;
          case EVENT_TYPE_CACHE_WRITE:
             cache_->HandleWrite(request);
-            server_->AddWriteRequest(request);
+            server_->AddWriteRequest(request, false);
+            break;
+         case EVENT_TYPE_CACHE_WRITE_STREAM:
+            // TODO(lanstat): Add stream buffer for cache
             break;
          case EVENT_TYPE_DNS_VERIFY:
             dns_->HandleVerifyUDP();
@@ -196,10 +218,13 @@ void Engine::Run() {
             Utils::ReleaseRequest(request);
             break;
          case EVENT_TYPE_HTTP_FETCH:
-            http_->HandleFetchData(request);
+            http_->HandleFetchData(request, false);
+            break;
+         case EVENT_TYPE_HTTP_FETCH_IPV4:
+            http_->HandleFetchData(request, true);
             break;
          case EVENT_TYPE_HTTP_READ:
-            http_->HandleReadData(request);
+            http_->HandleReadData(request, response);
             break;
             /*
             case EVENT_TYPE_CACHE_VERIFY:
@@ -212,4 +237,6 @@ void Engine::Run() {
       /* Mark this request as processed */
       io_uring_cqe_seen(&ring_, cqe);
    }
+   std::cout << "LAN_[" << __FILE__ << ":" << __LINE__ << "] "
+             << "asdad" << std::endl;
 }

@@ -14,19 +14,19 @@
 #include "Server.hpp"
 
 class HttpsClient : public Http {
-  public:
-   HttpsClient();
+ public:
+  HttpsClient();
 
-   int HandleFetchData(struct Request *request) override;
-   int HandleReadData(struct Request *request) override;
+  int HandleFetchData(struct Request *request, bool ipv4) override;
+  int HandleReadData(struct Request *request, int response) override;
 
-  private:
-   void AddReadRequest(struct Request *request, SSL *ssl, SSL_CTX *context,
-                       int fd);
-   void CloseSSL(int socket_fd, SSL *ssl, SSL_CTX *context);
+ private:
+  void AddReadRequest(struct Request *request, SSL *ssl, SSL_CTX *context,
+                      int fd);
+  void CloseSSL(int socket_fd, SSL *ssl, SSL_CTX *context);
 
-  protected:
-   void ReleaseSocket(struct Request *request) override;
-   bool ProcessError(SSL *ssl, int last_error);
+ protected:
+  void ReleaseSocket(struct Request *request) override;
+  bool ProcessError(SSL *ssl, int last_error);
 };
 #endif

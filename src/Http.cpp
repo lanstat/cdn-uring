@@ -13,7 +13,10 @@
 #include "Settings.hpp"
 #include "Utils.hpp"
 
-#define ZERO_LENGTH 10
+#define ZERO_LENGTH 20240
+
+const char *end_line = "\r\n";
+const char *ws = " \t\n\r\f\v";
 
 Http::Http() {
    buffer_size_ = Settings::HttpBufferSize;
@@ -30,30 +33,21 @@ void Http::SetCache(Cache *cache) { cache_ = cache; }
 
 void Http::AddFetchDataRequest(struct Request *req) {}
 
-int Http::GetDataReadedLength(void *src, struct HttpRequest *request) {
+int Http::FetchHeader(void *src) {
    int offset = 0;
-   if (request->header_size == 0) {
-      char *tmp = (char *)src;
-      while (offset < buffer_size_) {
-         if (tmp[offset] == '\r' && tmp[offset + 1] == '\n' &&
-             tmp[offset + 2] == '\r' && tmp[offset + 3] == '\n') {
-            request->header_size = offset + 4;
-            offset++;
-            break;
-         }
-         offset++;
-      }
-   }
+   char *tmp = (char *)src;
    while (offset < buffer_size_) {
-      if (memcmp(src + offset, zero_, ZERO_LENGTH) == 0) {
-         return offset;
+      if (tmp[offset] == '\r' && tmp[offset + 1] == '\n' &&
+          tmp[offset + 2] == '\r' && tmp[offset + 3] == '\n') {
+         return offset + 4;
       }
       offset++;
    }
-   return buffer_size_;
+   return 0;
 }
 
 struct Request *Http::UnifyBuffer(struct Request *request) {
+   /*
    struct HttpRequest *http_request = waiting_read_.at(request->client_socket);
    struct Request *auxiliar = http_request->request;
    std::vector<struct iovec> buffer = http_request->buffer;
@@ -83,10 +77,10 @@ struct Request *Http::UnifyBuffer(struct Request *request) {
    memcpy(auxiliar->iov[3].iov_base + header_size, tmp + http_request->header_size, body_size);
 
    return auxiliar;
-}
+   */
 
-const char *end_line = "\r\n";
-const char *ws = " \t\n\r\f\v";
+   return nullptr;
+}
 
 inline std::string &rtrim(std::string &s, const char *t = ws) {
    s.erase(s.find_last_not_of(t) + 1);

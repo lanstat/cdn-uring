@@ -45,6 +45,10 @@ void ParserArguments(int argc, char** argv) {
             Settings::UseCache = false;
             continue;
         }
+        if (strcmp(argv[i], "-hsl") == 0) {
+            Settings::UseCache = false;
+            continue;
+        }
     }
 }
 
@@ -65,6 +69,7 @@ int main(int argc, char** argv) {
         << "Started server on localhost:" << Settings::ServerPort;
 
     signal(SIGINT, SigIntHandler);
+    signal(SIGPIPE, SIG_IGN);
     io_uring_queue_init(QUEUE_DEPTH, &engine_->ring_, 0);
     engine_->Run();
 

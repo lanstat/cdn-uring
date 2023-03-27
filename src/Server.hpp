@@ -9,20 +9,24 @@
 #include "Request.hpp"
 
 class Server {
-  public:
-   Server();
-   void SetRing(struct io_uring *ring);
+ public:
+  Server();
+  void SetRing(struct io_uring *ring);
 
-   void AddReadRequest(int client_socket);
-   void AddHttpErrorRequest(int client_socket, int status_code);
-   bool HandleRead(struct Request *request, struct Request *inner_request);
+  void AddReadRequest(int client_socket);
+  void AddHttpErrorRequest(int client_socket, int status_code);
+  bool HandleRead(struct Request *request, struct Request *inner_request);
 
-   void AddWriteRequest(struct Request *request);
-   void HandleWrite(struct Request *request);
+  void AddWriteRequest(struct Request *request, bool is_stream);
+  void HandleWrite(struct Request *request, int response);
+  int HandleWriteStream(struct Request *request, int response);
 
-  private:
-   struct io_uring *ring_;
+  void AddCloseRequest(struct Request *request);
+  void HandleClose(struct Request *request);
 
-   int GetLine(const char *src, char *dest, int dest_sz);
+ private:
+  struct io_uring *ring_;
+
+  int FetchHeader(const char *src, char *command, char *header, int dest_sz);
 };
 #endif
