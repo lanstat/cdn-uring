@@ -196,10 +196,15 @@ int Cache::AddWriteRequestStream(struct Request *request) {
       memcpy(request->iov[3].iov_base, mux->header.at(buffer_pivot).iov_base,
              request->iov[3].iov_len);
    } else {
+      if (mux->buffer.find(buffer_pivot) == mux->buffer.end()) {
+         buffer_pivot = mux->count - 1;
+      }
       request->iov[3].iov_len = mux->buffer.at(buffer_pivot).iov_len;
-      memcpy(request->iov[3].iov_base, mux->buffer.at(buffer_pivot).iov_base, request->iov[3].iov_len);
+      memcpy(request->iov[3].iov_base, mux->buffer.at(buffer_pivot).iov_base,
+             request->iov[3].iov_len);
    }
-   request->packet_count++;
+   buffer_pivot++;
+   request->packet_count = buffer_pivot;
 
    server_->AddWriteRequest(request, true);
 

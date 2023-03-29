@@ -190,7 +190,7 @@ void Engine::Run() {
             if (server_->HandleWriteStream(request, response) == 1) {
                cache_->RemoveRequest(request);
                Utils::ReleaseRequest(request);
-               Log(__FILE__, __LINE__) << "Remove close";
+               Log(__FILE__, __LINE__) << "Remove client closed";
             } else {
                cache_->AddWriteRequestStream(request);
             }
