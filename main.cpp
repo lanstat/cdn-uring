@@ -45,7 +45,7 @@ void ParserArguments(int argc, char** argv) {
             Settings::UseCache = false;
             continue;
         }
-        if (strcmp(argv[i], "-hsl") == 0) {
+        if (strcmp(argv[i], "-hls") == 0) {
             Settings::UseCache = false;
             continue;
         }

@@ -164,9 +164,11 @@ void Server::AddWriteRequest(struct Request *req, bool is_stream) {
    } else {
       req->event_type = EVENT_TYPE_SERVER_WRITE;
    }
+   req->is_processing = true;
    io_uring_prep_write(sqe, req->client_socket, req->iov[3].iov_base,
                        req->iov[3].iov_len, 0);
    io_uring_sqe_set_data(sqe, req);
+   sqe->flags |= IOSQE_IO_LINK;
    io_uring_submit(ring_);
 }
 

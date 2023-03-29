@@ -94,7 +94,6 @@ void HttpClient::AddReadRequest(struct Request *request, int fd, int cache_socke
    struct Request *auxiliar = Utils::HttpExternalRequest();
    auxiliar->event_type = EVENT_TYPE_HTTP_READ;
    auxiliar->client_socket = fd;
-   auxiliar->cache_socket = cache_socket;
    auxiliar->resource_id = request->resource_id;
    auxiliar->iov[0].iov_base = malloc(buffer_size_);
    auxiliar->iov[0].iov_len = buffer_size_;
@@ -114,14 +113,6 @@ int HttpClient::HandleReadData(struct Request *request, int readed) {
       return 1;
    }
 
-   if (http_request->has_header == 0) {
-      int header_size = FetchHeader(request->iov[0].iov_base);
-      void *header = malloc(header_size);
-      memcpy(header, request->iov[0].iov_base, header_size);
-      cache_->SetHeaderRequest(request->resource_id, header, header_size);
-      http_request->has_header = 1;
-   }
-
    // If there is no listeners
    if (cache_->AddWriteRequestStream(request->resource_id, request->iov[0].iov_base, readed) == 1) {
       Log(__FILE__, __LINE__) << "HttpClient empty stream listeners";
@@ -134,6 +125,7 @@ int HttpClient::HandleReadData(struct Request *request, int readed) {
    struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
    io_uring_prep_readv(sqe, request->client_socket, &request->iov[0], 1, 0);
    io_uring_sqe_set_data(sqe, request);
+   sqe->flags |= IOSQE_IO_LINK;
    io_uring_submit(ring_);
 
    return 0;

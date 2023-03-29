@@ -9,6 +9,7 @@
 #include "xxhash64.h"
 
 #define INVALID_FILE 13816973012072644543ULL
+#define BUFFER_PACKET_SIZE 10
 
 Cache::Cache() { server_ = nullptr; }
 
@@ -44,19 +45,18 @@ void Cache::AddExistsRequest(struct Request *request) {
       // If there is other request fetching the file wait until finished
       if (waiting_read_.find(resource_id) != waiting_read_.cend()) {
          Log(__FILE__, __LINE__) << "Waiting cache";
-         AddWriteHeaderRequest(request, resource_id);
 
+         request->debug = true;
          struct Mux *mux = waiting_read_.at(resource_id);
          mux->requests.push_back(request);
          return;
       }
       Log(__FILE__, __LINE__) << "Fetching cache";
-      std::vector<struct Request *> requests;
-      requests.push_back(request);
 
-      struct Mux *mux = new Mux();
-      mux->requests = requests;
-      mux->header_len = 0;
+      struct Mux *mux = CreateMux();
+
+      mux->requests.push_back(request);
+
       std::pair<uint64_t, struct Mux *> item(resource_id, mux);
       waiting_read_.insert(item);
    }
@@ -124,6 +124,7 @@ int Cache::HandleRead(struct Request *request) {
 }
 
 void Cache::AddWriteRequest(struct Request *request) {
+   /*
    struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
    request->event_type = EVENT_TYPE_CACHE_WRITE;
 
@@ -131,6 +132,7 @@ void Cache::AddWriteRequest(struct Request *request) {
                        request->iov[3].iov_len, 0);
    io_uring_sqe_set_data(sqe, request);
    io_uring_submit(ring_);
+   */
 }
 
 int Cache::HandleWrite(struct Request *request) {
@@ -149,20 +151,58 @@ int Cache::AddWriteRequestStream(uint64_t resource_id, void *buffer, int size) {
    const std::vector<struct Request *> &requests = mux->requests;
 
    if (requests.empty()) {
+      ReleaseResource(resource_id);
       return 1;
    }
 
-   for (struct Request *const c : requests) {
-      //c->iov[3].iov_base = malloc(Settings::HttpBufferSize);
-      //c->iov[3].iov_len = Settings::HttpBufferSize;
-      if (c->iov[3].iov_len > 0) {
-         free(c->iov[3].iov_base);
-      }
-      c->iov[3].iov_base = malloc(size);
-      c->iov[3].iov_len = size;
-      memcpy(c->iov[3].iov_base, buffer, size);
-      server_->AddWriteRequest(c, true);
+   struct iovec packet;
+   packet.iov_base = malloc(size);
+   packet.iov_len = size;
+   memcpy(packet.iov_base, buffer, size);
+
+   // Store the packet in the buffer
+   if (mux->count < BUFFER_PACKET_SIZE) {
+      mux->header.push_back(packet);
+   } else {
+      std::pair<int, struct iovec> item(mux->count, packet);
+      mux->buffer.insert(item);
    }
+
+   mux->count++;
+
+   for (struct Request *const c : requests) {
+      if (!c->is_processing) {
+         AddWriteRequestStream(c);
+      }
+   }
+
+   return 0;
+}
+
+int Cache::AddWriteRequestStream(struct Request *request) {
+   struct Mux *mux = waiting_read_.at(request->resource_id);
+
+   if (mux->count <= request->packet_count) {
+      return 1;
+   }
+
+   if (request->iov[3].iov_len == 0) {
+      request->iov[3].iov_base = malloc(Settings::HttpBufferSize);
+   }
+   int buffer_pivot = request->packet_count;
+
+   if (buffer_pivot < BUFFER_PACKET_SIZE) {
+      request->iov[3].iov_len = mux->header.at(buffer_pivot).iov_len;
+      memcpy(request->iov[3].iov_base, mux->header.at(buffer_pivot).iov_base,
+             request->iov[3].iov_len);
+   } else {
+      request->iov[3].iov_len = mux->buffer.at(buffer_pivot).iov_len;
+      memcpy(request->iov[3].iov_base, mux->buffer.at(buffer_pivot).iov_base, request->iov[3].iov_len);
+   }
+   request->packet_count++;
+
+   server_->AddWriteRequest(request, true);
+
    return 0;
 }
 
@@ -241,6 +281,7 @@ int Cache::RemoveRequest(struct Request *request) {
    }
 
    requests.erase(requests.begin() + pointer);
+   mux->requests = requests;
 
    if (requests.empty()) {
       ReleaseResource(resource_id);
@@ -251,27 +292,26 @@ int Cache::RemoveRequest(struct Request *request) {
 
 void Cache::ReleaseResource(uint64_t resource_id) {
    struct Mux *mux = waiting_read_.at(resource_id);
-   if (mux->header_len > 0) {
-      free(mux->header_base);
+   int size = (int)mux->header.size();
+   for (int i = 0; i < size; i++) {
+      if (mux->header.at(i).iov_len > 0) {
+         free(mux->header.at(i).iov_base);
+      }
    }
+   mux->header.clear();
    delete mux;
    waiting_read_.erase(resource_id);
 }
 
-void Cache::AddWriteHeaderRequest(struct Request *request, uint64_t resource_id) {
-   struct Mux *mux = waiting_read_.at(resource_id);
-   if (request->iov[3].iov_len > 0) {
-      free(request->iov[3].iov_base);
-   }
-   request->iov[3].iov_base = malloc(mux->header_len);
-   request->iov[3].iov_len = mux->header_len;
-   memcpy(request->iov[3].iov_base, mux->header_base, mux->header_len);
-   server_->AddWriteRequest(request, true);
-}
+struct Mux *Cache::CreateMux() {
+   std::vector<struct Request *> requests;
+   std::vector<struct iovec> header;
+   std::unordered_map<int, struct iovec> buffer;
 
-void Cache::SetHeaderRequest(uint64_t resource_id, void *base, int len) {
-   struct Mux *mux = waiting_read_.at(resource_id);
-   mux->header_base = base;
-   mux->header_len = len;
-   std::cout<< "LAN_[" << __FILE__ << ":" << __LINE__ << "] "<< len << " capturado header" << std::endl;
+   struct Mux *mux = new Mux();
+   mux->requests = requests;
+   mux->header = header;
+   mux->count = 0;
+   mux->buffer = buffer;
+   return mux;
 }

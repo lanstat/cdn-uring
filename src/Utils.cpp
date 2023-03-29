@@ -28,6 +28,9 @@ struct Request *Utils::CreateRequest(int iovec_count) {
    for (int i = 0; i < req->iovec_count; i++) {
       req->iov[i].iov_len = 0;
    }
+   req->packet_count = 0;
+   req->is_processing = false;
+   req->debug = false;
    return req;
 }
 

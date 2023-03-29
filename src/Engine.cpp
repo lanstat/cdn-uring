@@ -162,6 +162,8 @@ void Engine::Run() {
       struct Request *request = (struct Request *)cqe->user_data;
       int response = (int)cqe->res;
 
+      request->is_processing = false;
+
       if (request->event_type != EVENT_TYPE_DNS_VERIFY) {
          PrintRequestType(request->event_type);
       }
@@ -189,6 +191,8 @@ void Engine::Run() {
                cache_->RemoveRequest(request);
                Utils::ReleaseRequest(request);
                Log(__FILE__, __LINE__) << "Remove close";
+            } else {
+               cache_->AddWriteRequestStream(request);
             }
             break;
          case EVENT_TYPE_SERVER_CLOSE:
