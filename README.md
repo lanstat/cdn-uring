@@ -25,6 +25,8 @@ make
 ### Server
 ```sh
 ./cdn [arguments]
+./cdn -ssl -server-port=8001 &
+./cdn -server-port=8000 &
 ```
 ### Nginx
 ```nginx
@@ -39,7 +41,7 @@ http {
 
   server {
     listen 80;
-    server_name cdn.uring.com;
+    server_name _;
     location / {
       proxy_pass http://http_stream;
     }
@@ -47,7 +49,7 @@ http {
   
   server {
     listen 443;
-    server_name cdn.uring.com;
+    server_name _;
     location / {
       proxy_pass http://https_stream;
     }
@@ -56,7 +58,8 @@ http {
 ```
 ### Client
 ```sh
-wget https://localhost:8000/upload.wikimedia.org/wikipedia/commons/3/35/Tux.svg
+wget https://localhost/upload.wikimedia.org/wikipedia/commons/3/35/Tux.svg
+wget http://localhost/upload.wikimedia.org/wikipedia/commons/3/35/Tux.svg
 ```
 ### Arguments
 - __-ssl__ Enable https support
