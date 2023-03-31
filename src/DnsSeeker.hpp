@@ -49,6 +49,7 @@ class DnsSeeker {
     virtual void dnsRight(const std::vector<void *> &requests, const sockaddr_in &socket_v4) = 0;
     virtual void dnsRight(void * request, const sockaddr_in &socket_v4) = 0;
     virtual void dnsError() = 0;
+    virtual void dnsError(void *request) = 0;
     virtual void dnsWrong() = 0;
 
     uint64_t msFrom1970();

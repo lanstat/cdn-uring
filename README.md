@@ -16,7 +16,7 @@
 ## Build 
 ```sh
 cd build
-cmake
+cmake ../
 make
 ```
 
@@ -36,5 +36,5 @@ make
 ## TODO
 - Add nginx configuration
 - Add buffer cleaner
-- Add ipv4/ipv6 socket linker
+- Add stream manager
 
