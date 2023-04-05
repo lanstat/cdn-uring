@@ -17,8 +17,9 @@ class HttpsClient : public Http {
  public:
   HttpsClient();
 
-  int HandleFetchData(struct Request *request, bool ipv4) override;
+  bool HandleFetchRequest(struct Request *request, bool ipv4) override;
   int HandleReadData(struct Request *request, int response) override;
+  int HandleReadHeaderRequest(struct Request *http, int readed) override;
 
  private:
   void AddReadRequest(struct Request *request, SSL *ssl, SSL_CTX *context,

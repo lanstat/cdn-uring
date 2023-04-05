@@ -4,6 +4,8 @@
 #include <liburing.h>
 
 #include <unordered_map>
+#include <vector>
+#include <string>
 
 #include "Request.hpp"
 
@@ -15,7 +17,9 @@ struct File {
 struct Mux {
    std::vector<struct Request *> requests;
    std::vector<struct iovec> header;
-   int count;
-   std::unordered_map<int, struct iovec> buffer;
+   unsigned int count;
+   std::vector<struct iovec> buffer;
+   int type;
+   std::string path;
 };
 #endif

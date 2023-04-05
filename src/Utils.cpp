@@ -28,7 +28,7 @@ struct Request *Utils::CreateRequest(int iovec_count) {
    for (int i = 0; i < req->iovec_count; i++) {
       req->iov[i].iov_len = 0;
    }
-   req->packet_count = 0;
+   req->pivot = 0;
    req->is_processing = false;
    req->debug = false;
    return req;
@@ -38,9 +38,11 @@ struct Request *Utils::CreateRequest(int iovec_count) {
  * Object for entry http request
  *
  * 0 = char* request's header
+ * 1 = resource http path
+ * 2 = header content
  */
 struct Request *Utils::HttpEntryRequest() {
-   return CreateRequest(1);
+   return CreateRequest(3);
 }
 
 /*
@@ -57,10 +59,10 @@ struct Request *Utils::HttpErrorRequest() {
  *
  * 0 = char* path requested by the client eg. google.com/images
  * 1 = char* guid for the cache resource
- * 2 = statx* status of the resource in cache
- * 3 = void* response content
+ * 2 = char* header of the external client
+ * 3 = statx* status of the resource in cache
  * 4 = sockaddr_in|sockaddr_in6 * pointer to external server
- * 5 = char* header of the external client
+ * 5 = void* response content
  */
 struct Request *Utils::HttpInnerRequest() {
    return CreateRequest(6);
@@ -71,8 +73,11 @@ struct Request *Utils::HttpInnerRequest() {
  *
  * 0 = void* bytes bytes readed for the request
  */
-struct Request *Utils::HttpExternalRequest() {
-   return CreateRequest(1);
+struct Request *Utils::HttpExternalRequest(struct Request *cache) {
+   struct Request *request = CreateRequest(1);
+   request->resource_id = cache->resource_id;
+
+   return request;
 }
 
 /*
@@ -84,6 +89,36 @@ struct Request *Utils::HttpExternalRequest() {
  */
 struct Request *Utils::HttpsExternalRequest() {
    return CreateRequest(3);
+}
+
+/*
+ * Object for stream request 
+ *
+ * 0 = void* bytes to r/w to client socket
+ * 1 = int cache's file descriptor
+ */
+struct Request *Utils::StreamRequest(struct Request *entry) {
+   struct Request *request = CreateRequest(2);
+   request->resource_id = entry->resource_id;
+   request->client_socket = entry->client_socket;
+
+   return request;
+}
+
+/*
+ * Object for cache request 
+ *
+ * 0 = statx* status of the resource in cache
+ * 1 = char* guid for the cache resource
+ * 2 = char* path requested by the client eg. google.com/images
+ * 3 = char* client header 
+ * 4 = sockaddr_in|sockaddr_in6 * pointer to external server
+ */
+struct Request *Utils::CacheRequest(struct Request *entry) {
+   struct Request *request = CreateRequest(5);
+   request->resource_id = entry->resource_id;
+
+   return request;
 }
 
 void Utils::ReleaseRequest(struct Request *request) {

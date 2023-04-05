@@ -58,7 +58,7 @@ void Dns::AddVerifyUDPRequest() {
 }
 
 void Dns::AddFetchAAAARequest(struct Request *request, bool isHttps) {
-   std::string host((char *)request->iov[0].iov_base);
+   std::string host((char *)request->iov[2].iov_base);
    host = host.substr(1);
    std::size_t pos = host.find("/");
    host = host.substr(0, pos);
@@ -121,17 +121,17 @@ void Dns::dnsRight(const std::vector<void *> &requests,
    }
 }
 
-void Dns::dnsRight(void *record, const sockaddr_in6 &sIPv6) {
-   struct Request *request = (Request *)record;
+void Dns::dnsRight(void *record, const sockaddr_in6 &socket_v6) {
+   struct Request *cache = (Request *)record;
    size_t size = sizeof(sockaddr_in6);
-   request->iov[4].iov_base = malloc(size);
-   request->iov[4].iov_len = size;
-   memcpy(request->iov[4].iov_base, &sIPv6, size);
-   request->event_type = EVENT_TYPE_HTTP_FETCH;
+   cache->iov[4].iov_base = malloc(size);
+   cache->iov[4].iov_len = size;
+   memcpy(cache->iov[4].iov_base, &socket_v6, size);
+   cache->event_type = EVENT_TYPE_HTTP_FETCH;
 
    struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
    io_uring_prep_nop(sqe);
-   io_uring_sqe_set_data(sqe, request);
+   io_uring_sqe_set_data(sqe, cache);
    io_uring_submit(ring_);
 }
 
@@ -139,16 +139,16 @@ void Dns::dnsRight(const std::vector<void *> &requests,
                    const sockaddr_in &socket_v4) {}
 
 void Dns::dnsRight(void *record, const sockaddr_in &socket_v4) {
-   struct Request *request = (Request *)record;
+   struct Request *cache = (Request *)record;
    size_t size = sizeof(sockaddr_in);
-   request->iov[4].iov_base = malloc(size);
-   request->iov[4].iov_len = size;
-   memcpy(request->iov[4].iov_base, &socket_v4, size);
-   request->event_type = EVENT_TYPE_HTTP_FETCH_IPV4;
+   cache->iov[4].iov_base = malloc(size);
+   cache->iov[4].iov_len = size;
+   memcpy(cache->iov[4].iov_base, &socket_v4, size);
+   cache->event_type = EVENT_TYPE_HTTP_FETCH_IPV4;
 
    struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
    io_uring_prep_nop(sqe);
-   io_uring_sqe_set_data(sqe, request);
+   io_uring_sqe_set_data(sqe, cache);
    io_uring_submit(ring_);
 }
 

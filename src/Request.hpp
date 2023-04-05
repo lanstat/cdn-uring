@@ -6,7 +6,7 @@ struct Request {
    int iovec_count;
    int client_socket;
    uint64_t resource_id;
-   int packet_count;
+   unsigned int pivot;
    bool debug;
    bool is_processing;
    struct iovec iov[];

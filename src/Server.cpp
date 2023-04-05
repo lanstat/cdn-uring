@@ -7,6 +7,7 @@
 #include "Logger.hpp"
 #include "Request.hpp"
 #include "Utils.hpp"
+#include "xxhash64.h"
 
 #define READ_SZ 8192
 #define SOCKET_CLOSED -32
@@ -53,39 +54,35 @@ void Server::AddReadRequest(int client_socket) {
    io_uring_submit(ring_);
 }
 
-bool Server::HandleRead(struct Request *request,
-                        struct Request *inner_request) {
+bool Server::HandleRead(struct Request *entry_request) {
    char http_command[1024];
-   char header[2048];
-   if (FetchHeader((char *)request->iov[0].iov_base, http_command, header,
+   char header[1024];
+   if (FetchHeader((char *)entry_request->iov[0].iov_base, http_command, header,
                    sizeof(header))) {
       Log(__FILE__, __LINE__, Log::kError) << "Malformed request";
-      AddHttpErrorRequest(request->client_socket, 400);
-      Utils::ReleaseRequest(request);
+      AddHttpErrorRequest(entry_request->client_socket, 400);
       return false;
    }
-   char *method, *path, *saveptr;
+   char *saveptr, *method, *path;
 
    method = strtok_r(http_command, " ", &saveptr);
    Utils::StrToLower(method);
    path = strtok_r(NULL, " ", &saveptr);
 
-   inner_request->iov[0].iov_base = malloc(strlen(path) + 1);
-   inner_request->iov[0].iov_len = strlen(path) + 1;
-   strcpy((char *)inner_request->iov[0].iov_base, path);
-
-   inner_request->iov[5].iov_base = malloc(strlen(header) + 1);
-   inner_request->iov[5].iov_len = strlen(header) + 1;
-   strcpy((char *)inner_request->iov[5].iov_base, header);
-
-   inner_request->client_socket = request->client_socket;
-
    if (strcmp(method, "get") == 0) {
-      Utils::ReleaseRequest(request);
+      entry_request->iov[1].iov_base = malloc(strlen(path) + 1);
+      entry_request->iov[1].iov_len = strlen(path) + 1;
+      strcpy((char *)entry_request->iov[1].iov_base, path);
+
+      entry_request->iov[2].iov_base = malloc(strlen(header) + 1);
+      entry_request->iov[2].iov_len = strlen(header) + 1;
+      strcpy((char *)entry_request->iov[2].iov_base, header);
+
+      entry_request->resource_id = GetResourceId(path);
+
       return true;
    }
-   AddHttpErrorRequest(request->client_socket, 405);
-   Utils::ReleaseRequest(request);
+   AddHttpErrorRequest(entry_request->client_socket, 405);
 
    return false;
 }
@@ -93,7 +90,7 @@ bool Server::HandleRead(struct Request *request,
 void Server::AddHttpErrorRequest(int client_socket, int status_code) {
    struct Request *req = Utils::HttpErrorRequest();
    struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
-   req->event_type = EVENT_TYPE_SERVER_WRITE;
+   req->event_type = EVENT_TYPE_SERVER_WRITE_COMPLETE;
    req->client_socket = client_socket;
 
    const char *data;
@@ -142,6 +139,8 @@ int Server::FetchHeader(const char *src, char *command, char *header,
    std::string header_raw(src);
    std::size_t pos = header_raw.find("\r\n");
    std::string first_line = header_raw.substr(0, pos);
+   std::cout << "LAN_[" << __FILE__ << ":" << __LINE__ << "] " << first_line
+             << std::endl;
    std::string content = header_raw.substr(pos + 2);
 
    std::string pivot = "Host: ";
@@ -157,18 +156,17 @@ int Server::FetchHeader(const char *src, char *command, char *header,
    return 0;
 }
 
-void Server::AddWriteRequest(struct Request *req, bool is_stream) {
+void Server::AddWriteRequest(struct Request *stream, bool is_stream) {
    struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
    if (is_stream) {
-      req->event_type = EVENT_TYPE_SERVER_WRITE_STREAM;
+      stream->event_type = EVENT_TYPE_SERVER_WRITE_PARTIAL;
    } else {
-      req->event_type = EVENT_TYPE_SERVER_WRITE;
+      stream->event_type = EVENT_TYPE_SERVER_WRITE_COMPLETE;
    }
-   req->is_processing = true;
-   io_uring_prep_write(sqe, req->client_socket, req->iov[3].iov_base,
-                       req->iov[3].iov_len, 0);
-   io_uring_sqe_set_data(sqe, req);
-   sqe->flags |= IOSQE_IO_LINK;
+   stream->is_processing = true;
+   io_uring_prep_write(sqe, stream->client_socket, stream->iov[0].iov_base,
+                       stream->iov[0].iov_len, 0);
+   io_uring_sqe_set_data(sqe, stream);
    io_uring_submit(ring_);
 }
 
@@ -195,4 +193,19 @@ void Server::HandleClose(struct Request *request) {
    Log(__FILE__, __LINE__) << "Socket close";
    close(request->client_socket);
    Utils::ReleaseRequest(request);
+}
+
+uint64_t Server::GetResourceId(char *url) {
+   std::string aux(url);
+   return XXHash64::hash(url, aux.length(), 0);
+}
+
+void Server::AddWriteHeaderRequest(struct Request *stream) {
+   struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
+   stream->event_type = EVENT_TYPE_SERVER_WRITE_HEADER;
+   stream->is_processing = true;
+   io_uring_prep_write(sqe, stream->client_socket, stream->iov[0].iov_base,
+                       stream->iov[0].iov_len, 0);
+   io_uring_sqe_set_data(sqe, stream);
+   io_uring_submit(ring_);
 }

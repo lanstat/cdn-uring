@@ -10,27 +10,31 @@
 
 #include "Mux.hpp"
 #include "Request.hpp"
-#include "Server.hpp"
+#include "Stream.hpp"
 
 class Cache {
   public:
    Cache();
 
    void SetRing(struct io_uring *ring);
-   void SetServer(Server *server);
+   void SetStream(Stream *stream);
 
    void AddVerifyRequest();
    int HandleVerify();
 
-   void AddExistsRequest(struct Request *request);
-   int HandleExists(struct Request *request);
+   void AddExistsRequest(struct Request *entry);
+   bool HandleExists(struct Request *request);
 
    void AddReadRequest(struct Request *request);
    int HandleRead(struct Request *request);
 
+   void AddReadHeaderRequest(struct Request *cache);
+   int HandleReadHeader(struct Request *cache, int readed);
+
    void AddWriteRequest(struct Request *request);
    int HandleWrite(struct Request *request);
 
+   /*
    void CloseStream(uint64_t resource_id);
    int AddWriteRequestStream(uint64_t resource_id, void *buffer, int size);
    int AddWriteRequestStream(struct Request *request);
@@ -40,20 +44,12 @@ class Cache {
    void ReleaseAllWaitingRequest(struct Request *request);
 
    int RemoveRequest(struct Request *request);
+   */
 
   private:
    struct io_uring *ring_;
-   Server *server_;
+   Stream *stream_;
 
-   std::string GetUID(uint64_t resource_id);
-   uint64_t GetResourceId(char *url);
-   std::unordered_map<std::string, struct File> files_;
-   std::unordered_map<uint64_t, struct Mux *> waiting_read_;
-
-   void AddCopyRequest(struct Request *request, File *file);
-   void StoreFileInMemory(struct Request *request);
-   void ReleaseResource(uint64_t resource_id);
-
-   struct Mux *CreateMux();
+   std::string GetCachePath(uint64_t resource_id);
 };
 #endif

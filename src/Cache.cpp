@@ -11,81 +11,90 @@
 #define INVALID_FILE 13816973012072644543ULL
 #define BUFFER_PACKET_SIZE 10
 
-Cache::Cache() { server_ = nullptr; }
+Cache::Cache() { stream_ = nullptr; }
 
 void Cache::SetRing(struct io_uring *ring) { ring_ = ring; }
 
-void Cache::SetServer(Server *server) { server_ = server; }
+void Cache::SetStream(Stream *stream) { stream_ = stream; }
 
-std::string Cache::GetUID(uint64_t resource_id) {
+std::string Cache::GetCachePath(uint64_t resource_id) {
    std::string uri;
    uri.append(Settings::CacheDir);
    uri.append(std::to_string(resource_id));
    return uri;
 }
 
-uint64_t Cache::GetResourceId(char *url) {
-   std::string aux(url);
-   return XXHash64::hash(url, aux.length(), 0);
-}
-
-void Cache::AddExistsRequest(struct Request *request) {
-   auto resource_id = GetResourceId((char *)request->iov[0].iov_base);
-   std::string path = GetUID(resource_id);
-
-   request->resource_id = resource_id;
-
-   // In the case of the file is cached
-   if (files_.find(path) != files_.cend() && Settings::UseCache) {
-      Log(__FILE__, __LINE__) << "Reading from cache";
-      struct File file = files_.at(path);
-      AddCopyRequest(request, &file);
-      return;
-   } else {
-      // If there is other request fetching the file wait until finished
-      if (waiting_read_.find(resource_id) != waiting_read_.cend()) {
-         Log(__FILE__, __LINE__) << "Waiting cache";
-
-         request->debug = true;
-         struct Mux *mux = waiting_read_.at(resource_id);
-         mux->requests.push_back(request);
-         return;
-      }
-      Log(__FILE__, __LINE__) << "Fetching cache";
-
-      struct Mux *mux = CreateMux();
-
-      mux->requests.push_back(request);
-
-      std::pair<uint64_t, struct Mux *> item(resource_id, mux);
-      waiting_read_.insert(item);
-   }
+void Cache::AddExistsRequest(struct Request *entry) {
+   std::string path = GetCachePath(entry->resource_id);
+   struct Request *cache = Utils::CacheRequest(entry);
 
    struct statx stx;
    size_t size = sizeof(stx);
-   request->iov[2].iov_base = malloc(size);
-   request->iov[2].iov_len = size;
-   memset(request->iov[2].iov_base, 0xbf, size);
+   cache->iov[0].iov_base = malloc(size);
+   cache->iov[0].iov_len = size;
+   memset(cache->iov[0].iov_base, 0xbf, size);
 
-   request->iov[1].iov_base = malloc(path.length() + 1);
-   request->iov[1].iov_len = path.length() + 1;
-   strcpy((char *)request->iov[1].iov_base, path.c_str());
+   cache->iov[1].iov_base = malloc(path.length() + 1);
+   cache->iov[1].iov_len = path.length() + 1;
+   strcpy((char *)cache->iov[1].iov_base, path.c_str());
+
+   // Client url
+   cache->iov[2].iov_base = malloc(entry->iov[1].iov_len);
+   cache->iov[2].iov_len = entry->iov[1].iov_len;
+   memcpy(cache->iov[2].iov_base, entry->iov[1].iov_base,
+          cache->iov[2].iov_len);
+
+   // Copy client header
+   cache->iov[3].iov_base = malloc(entry->iov[2].iov_len);
+   cache->iov[3].iov_len = entry->iov[2].iov_len;
+   memcpy(cache->iov[3].iov_base, entry->iov[2].iov_base,
+          cache->iov[3].iov_len);
 
    struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
-   request->event_type = EVENT_TYPE_CACHE_EXISTS;
-   io_uring_prep_statx(sqe, 0, (char *)request->iov[1].iov_base,
+   cache->event_type = EVENT_TYPE_CACHE_EXISTS;
+   io_uring_prep_statx(sqe, 0, (char *)cache->iov[1].iov_base,
                        AT_STATX_SYNC_AS_STAT, STATX_SIZE | STATX_INO,
-                       (struct statx *)request->iov[2].iov_base);
-   io_uring_sqe_set_data(sqe, request);
+                       (struct statx *)cache->iov[0].iov_base);
+   io_uring_sqe_set_data(sqe, cache);
    io_uring_submit(ring_);
 }
 
-int Cache::HandleExists(struct Request *request) {
-   struct statx *stx = (struct statx *)request->iov[2].iov_base;
+bool Cache::HandleExists(struct Request *cache) {
+   struct statx *stx = (struct statx *)cache->iov[0].iov_base;
 
-   if (!Settings::UseCache) return 1;
+   if (stx->stx_ino == INVALID_FILE) return false;
 
-   if (stx->stx_ino == INVALID_FILE) return 1;
+   return true;
+}
+
+void Cache::AddReadHeaderRequest(struct Request *cache) {
+   std::string path((char *)cache->iov[1].iov_base);
+   path = path + "_h";
+
+   int fd = open(path.c_str(), O_RDONLY);
+
+   if (fd < 0) {
+      Log(__FILE__, __LINE__, Log::kError)
+          << "wrong file " << path << " " << strerror(errno);
+      stream_->AbortStream(cache->resource_id);
+      return;
+   }
+
+   struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
+   cache->iov[2].iov_base = malloc(Settings::HttpBufferSize);
+   cache->iov[2].iov_len = Settings::HttpBufferSize;
+   cache->event_type = EVENT_TYPE_CACHE_READ_HEADER;
+   memset(cache->iov[2].iov_base, 0, Settings::HttpBufferSize);
+
+   io_uring_prep_readv(sqe, fd, &cache->iov[2], 1, 0);
+   // io_uring_prep_read(sqe, fd, &request->iov[2].iov_base, stx->stx_size, 0);
+   io_uring_sqe_set_data(sqe, cache);
+   io_uring_submit(ring_);
+}
+
+int Cache::HandleReadHeader(struct Request *cache, int readed) {
+   cache->iov[2].iov_len = readed;
+   stream_->SetCacheResource(cache->resource_id, cache);
    return 0;
 }
 
@@ -99,13 +108,13 @@ void Cache::AddReadRequest(struct Request *request) {
    if (fd < 0) {
       Log(__FILE__, __LINE__, Log::kError)
           << "wrong file " << path << " " << strerror(errno);
-      ReleaseErrorAllWaitingRequest(request, 502);
+      stream_->ReleaseErrorAllWaitingRequest(request->resource_id, 502);
       return;
    }
    struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
    request->iov[3].iov_base = malloc(stx->stx_size);
    request->iov[3].iov_len = stx->stx_size;
-   request->event_type = EVENT_TYPE_CACHE_READ;
+   request->event_type = EVENT_TYPE_CACHE_READ_CONTENT;
    memset(request->iov[3].iov_base, 0, stx->stx_size);
 
    /* Linux kernel 5.5 has support for readv, but not for recv() or read() */
@@ -116,9 +125,11 @@ void Cache::AddReadRequest(struct Request *request) {
 }
 
 int Cache::HandleRead(struct Request *request) {
+   /*
    StoreFileInMemory(request);
 
    ReleaseAllWaitingRequest(request);
+   */
 
    return 0;
 }
@@ -136,11 +147,12 @@ void Cache::AddWriteRequest(struct Request *request) {
 }
 
 int Cache::HandleWrite(struct Request *request) {
-   StoreFileInMemory(request);
-   ReleaseAllWaitingRequest(request);
+   // StoreFileInMemory(request);
+   // ReleaseAllWaitingRequest(request);
    return 0;
 }
 
+/*
 int Cache::AddWriteRequestStream(uint64_t resource_id, void *buffer, int size) {
    if (waiting_read_.find(resource_id) == waiting_read_.end()) {
       return 1;
@@ -162,6 +174,11 @@ int Cache::AddWriteRequestStream(uint64_t resource_id, void *buffer, int size) {
 
    // Store the packet in the buffer
    if (mux->count < BUFFER_PACKET_SIZE) {
+      if (mux->count == 0) {
+         std::string header((char *)buffer);
+         std::cout << "LAN_[" << __FILE__ << ":" << __LINE__ << "] " << header
+                   << std::endl;
+      }
       mux->header.push_back(packet);
    } else {
       std::pair<int, struct iovec> item(mux->count, packet);
@@ -206,7 +223,7 @@ int Cache::AddWriteRequestStream(struct Request *request) {
    buffer_pivot++;
    request->packet_count = buffer_pivot;
 
-   server_->AddWriteRequest(request, true);
+   // server_->AddWriteRequest(request, true);
 
    return 0;
 }
@@ -215,7 +232,7 @@ void Cache::CloseStream(uint64_t resource_id) {
    struct Mux *mux = waiting_read_.at(resource_id);
    const std::vector<struct Request *> &requests = mux->requests;
    for (struct Request *const c : requests) {
-      server_->AddCloseRequest(c);
+      // server_->AddCloseRequest(c);
    }
 
    ReleaseResource(resource_id);
@@ -227,7 +244,7 @@ void Cache::AddCopyRequest(struct Request *request, File *file) {
 
    memcpy(request->iov[3].iov_base, file->data, file->size);
 
-   server_->AddWriteRequest(request, false);
+   // server_->AddWriteRequest(request, false);
 }
 
 void Cache::StoreFileInMemory(struct Request *request) {
@@ -248,7 +265,7 @@ void Cache::ReleaseErrorAllWaitingRequest(struct Request *request,
    const std::vector<struct Request *> &requests = mux->requests;
 
    for (struct Request *const c : requests) {
-      server_->AddHttpErrorRequest(c->client_socket, status_code);
+      // server_->AddHttpErrorRequest(c->client_socket, status_code);
       Utils::ReleaseRequest(c);
    }
 
@@ -318,5 +335,7 @@ struct Mux *Cache::CreateMux() {
    mux->header = header;
    mux->count = 0;
    mux->buffer = buffer;
+   // mux->is_streaming = false;
    return mux;
 }
+*/

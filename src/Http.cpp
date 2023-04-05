@@ -19,6 +19,9 @@ const char *end_line = "\r\n";
 const char *ws = " \t\n\r\f\v";
 
 Http::Http() {
+   stream_ = nullptr;
+   cache_ = nullptr;
+
    buffer_size_ = Settings::HttpBufferSize;
 
    zero_ = malloc(ZERO_LENGTH);
@@ -30,6 +33,8 @@ Http::~Http() { free(zero_); }
 void Http::SetRing(struct io_uring *ring) { ring_ = ring; }
 
 void Http::SetCache(Cache *cache) { cache_ = cache; }
+
+void Http::SetStream(Stream *stream) { stream_ = stream; }
 
 void Http::AddFetchDataRequest(struct Request *req) {}
 
@@ -96,6 +101,10 @@ inline std::string &trim(std::string &s, const char *t = ws) {
    return ltrim(rtrim(s, t), t);
 }
 
+int Http::GetResourceType(char *header, int size) {
+   return RESOURCE_TYPE_STREAMING;
+}
+
 std::string Http::CreateHeader(char *prev_header) {
    std::stringstream ss(prev_header);
    std::string line;
@@ -103,8 +112,8 @@ std::string Http::CreateHeader(char *prev_header) {
    std::unordered_map<std::string, std::string> header_data;
 
    while (std::getline(ss, line, '\n')) {
-      int pivot = line.find(":");
-      if (pivot > 0) {
+      auto pivot = line.find(":");
+      if (pivot != std::string::npos) {
          std::string value = line.substr(pivot + 1);
          std::pair<std::string, std::string> item(line.substr(0, pivot),
                                                   trim(value));

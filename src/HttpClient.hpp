@@ -13,16 +13,14 @@
 #include "Server.hpp"
 
 class HttpClient : public Http {
-  public:
-   HttpClient();
+ public:
+  HttpClient();
 
-   int HandleFetchData(struct Request *request, bool ipv4) override;
-   int HandleReadData(struct Request *request, int response) override;
+  int HandleReadHeaderRequest(struct Request *http, int readed) override;
+  bool HandleFetchRequest(struct Request *request, bool ipv4) override;
+  int HandleReadData(struct Request *request, int response) override;
 
-  private:
-   void AddReadRequest(struct Request *request, int fd, int cache_socket);
-
-  protected:
-   void ReleaseSocket(struct Request *inner_request) override;
+ protected:
+  void ReleaseSocket(struct Request *http) override;
 };
 #endif
