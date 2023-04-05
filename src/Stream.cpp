@@ -39,30 +39,27 @@ bool Stream::HandleExistsResource(struct Request *entry) {
 
 void Stream::AddWriteHeaders(struct Request *stream, struct Mux *mux) {
    stream->iov[0].iov_base = malloc(Settings::HttpBufferSize);
-   stream->iov[0].iov_len = mux->header.at(0).iov_len;
+   stream->iov[0].iov_len = mux->header.iov_len;
    memcpy(stream->iov[0].iov_base, mux->header.iov_base,
           stream->iov[0].iov_len);
-
-   std::cout<< "LAN_[" << __FILE__ << ":" << __LINE__ << "] "<< (int)mux->count << std::endl;
-   stream->pivot = mux->count;
 
    server_->AddWriteHeaderRequest(stream);
 }
 
 void Stream::HandleWriteHeaders(struct Request *stream) {
-   AddWriteStreamRequest(stream);
+   struct Mux *mux = resources_.at(stream->resource_id);
+   stream->pivot = mux->count;
+   //AddWriteStreamRequest(stream);
 }
 
 struct Mux *Stream::CreateMux() {
    std::vector<struct Request *> requests;
    std::vector<struct iovec> buffer;
-   std::vector<struct iovec> header;
 
    struct Mux *mux = new Mux();
    mux->requests = requests;
    mux->count = 0;
    mux->buffer = buffer;
-   mux->header = header;
    mux->type = RESOURCE_TYPE_UNDEFINED;
    return mux;
 }
@@ -73,11 +70,9 @@ void Stream::SetCacheResource(uint64_t resource_id, struct Request *cache) {
 
    mux->path = std::string((char *)cache->iov[1].iov_base);
 
-   struct iovec packet;
-   packet.iov_len = cache->iov[2].iov_len;
-   packet.iov_base = malloc(cache->iov[2].iov_len);
-   memcpy(packet.iov_base, cache->iov[2].iov_base, cache->iov[2].iov_len);
-   mux->header.push_back(packet);
+   mux->header.iov_len = cache->iov[2].iov_len;
+   mux->header.iov_base = malloc(cache->iov[2].iov_len);
+   memcpy(mux->header.iov_base, cache->iov[2].iov_base, cache->iov[2].iov_len);
 
    for (struct Request *const c : mux->requests) {
       if (!c->is_processing) {
@@ -91,12 +86,9 @@ void Stream::SetTypeResource(uint64_t resource_id, int type,
    struct Mux *mux = resources_.at(resource_id);
    mux->type = type;
 
-   struct iovec packet;
-   packet.iov_len = http->iov[0].iov_len;
-   packet.iov_base = malloc(http->iov[0].iov_len);
-   memcpy(packet.iov_base, http->iov[0].iov_base, http->iov[0].iov_len);
-
-   mux->header.push_back(packet);
+   mux->header.iov_len = http->iov[0].iov_len;
+   mux->header.iov_base = malloc(http->iov[0].iov_len);
+   memcpy(mux->header.iov_base, http->iov[0].iov_base, http->iov[0].iov_len);
 
    for (struct Request *const c : mux->requests) {
       if (!c->is_processing) {
@@ -177,21 +169,22 @@ void Stream::ReleaseErrorAllWaitingRequest(uint64_t resource_id,
 void Stream::ReleaseResource(uint64_t resource_id) {
    struct Mux *mux = resources_.at(resource_id);
 
-   int size = (int)mux->header.size();
-   for (int i = 0; i < size; i++) {
-      if (mux->header.at(i).iov_len > 0) {
-         free(mux->header.at(i).iov_base);
-      }
-   }
-   mux->header.clear();
+   //int size = (int)mux->header.size();
+   //for (int i = 0; i < size; i++) {
+      //if (mux->header.at(i).iov_len > 0) {
+         //free(mux->header.at(i).iov_base);
+      //}
+   //}
+   //mux->header.clear();
+   free(mux->header.iov_base);
 
-   size = (int)mux->buffer.size();
+   int size = (int)mux->buffer.size();
    for (int i = 0; i < size; i++) {
       if (mux->buffer.at(i).iov_len > 0) {
          free(mux->buffer.at(i).iov_base);
       }
    }
-   mux->header.clear();
+   mux->buffer.clear();
 
    delete mux;
    resources_.erase(resource_id);

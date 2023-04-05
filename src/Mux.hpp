@@ -16,7 +16,7 @@ struct File {
 
 struct Mux {
    std::vector<struct Request *> requests;
-   std::vector<struct iovec> header;
+   struct iovec header;
    unsigned int count;
    std::vector<struct iovec> buffer;
    int type;

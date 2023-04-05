@@ -9,11 +9,10 @@
 #include "Logger.hpp"
 #include "Utils.hpp"
 
-HttpClient::HttpClient() : Http() {
-}
+HttpClient::HttpClient() : Http() {}
 
 bool HttpClient::HandleFetchRequest(struct Request *cache, bool ipv4) {
-   std::string url((char *)cache->iov[1].iov_base);
+   std::string url((char *)cache->iov[2].iov_base);
    url = url.substr(1);
    std::size_t pos = url.find("/");
    std::string host = url.substr(0, pos);
@@ -25,18 +24,19 @@ bool HttpClient::HandleFetchRequest(struct Request *cache, bool ipv4) {
    int is_connected = -1;
 
    if (ipv4) {
-      struct sockaddr_in *client =
-          (struct sockaddr_in *)cache->iov[4].iov_base;
+      struct sockaddr_in *client = (struct sockaddr_in *)cache->iov[4].iov_base;
       sock = socket(AF_INET, SOCK_STREAM, 0);
       if (sock > 0) {
-         is_connected = connect(sock, (struct sockaddr *)client, sizeof(struct sockaddr_in));
+         is_connected = connect(sock, (struct sockaddr *)client,
+                                sizeof(struct sockaddr_in));
       }
    } else {
       struct sockaddr_in6 *client =
           (struct sockaddr_in6 *)cache->iov[4].iov_base;
       sock = socket(AF_INET6, SOCK_STREAM, 0);
       if (sock > 0) {
-         is_connected = connect(sock, (struct sockaddr *)client, sizeof(struct sockaddr_in6));
+         is_connected = connect(sock, (struct sockaddr *)client,
+                                sizeof(struct sockaddr_in6));
       }
    }
 
@@ -57,7 +57,7 @@ bool HttpClient::HandleFetchRequest(struct Request *cache, bool ipv4) {
    std::stringstream ss;
    ss << "GET " << query << " HTTP/1.1\r\n"
       << "Host: " << host << "\r\n"
-      << (char*)cache->iov[3].iov_base;
+      << (char *)cache->iov[3].iov_base;
    std::string request_data = ss.str();
 
    if (send(sock, request_data.c_str(), request_data.length(), 0) !=
@@ -89,7 +89,9 @@ bool HttpClient::HandleFetchRequest(struct Request *cache, bool ipv4) {
    http->iov[0].iov_len = buffer_size_;
    memset(http->iov[0].iov_base, 0, buffer_size_);
 
-   io_uring_prep_readv(sqe, sock, &http->iov[0], 1, 0);
+   // io_uring_prep_readv(sqe, sock, &http->iov[0], 1, 0);
+   io_uring_prep_read(sqe, http->client_socket, http->iov[0].iov_base,
+                      buffer_size_, 0);
    io_uring_sqe_set_data(sqe, http);
    io_uring_submit(ring_);
    return true;
@@ -112,7 +114,9 @@ int HttpClient::HandleReadHeaderRequest(struct Request *http, int readed) {
    struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
    http->event_type = EVENT_TYPE_HTTP_READ_CONTENT;
    http->pivot = type;
-   io_uring_prep_readv(sqe, http->client_socket, &http->iov[0], 1, 0);
+   // io_uring_prep_readv(sqe, http->client_socket, &http->iov[0], 1, 0);
+   io_uring_prep_read(sqe, http->client_socket, http->iov[0].iov_base,
+                      buffer_size_, 0);
    io_uring_sqe_set_data(sqe, http);
    io_uring_submit(ring_);
 
@@ -128,12 +132,13 @@ int HttpClient::HandleReadData(struct Request *http, int readed) {
 
    switch (http->pivot) {
       case RESOURCE_TYPE_CACHE:
-         // TODO(lanstat): add 
+         // TODO(lanstat): add
          break;
    }
 
    // If there is no listeners
-   if (stream_->NotifyStream(http->resource_id, http->iov[0].iov_base, readed) == 1) {
+   if (stream_->NotifyStream(http->resource_id, http->iov[0].iov_base,
+                             readed) == 1) {
       Log(__FILE__, __LINE__) << "HttpClient empty stream listeners";
       ReleaseSocket(http);
       return 1;
@@ -142,7 +147,9 @@ int HttpClient::HandleReadData(struct Request *http, int readed) {
    memset(http->iov[0].iov_base, 0, buffer_size_);
 
    struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
-   io_uring_prep_readv(sqe, http->client_socket, &http->iov[0], 1, 0);
+   // io_uring_prep_readv(sqe, http->client_socket, &http->iov[0], 1, 0);
+   io_uring_prep_read(sqe, http->client_socket, http->iov[0].iov_base,
+                      buffer_size_, 0);
    io_uring_sqe_set_data(sqe, http);
    io_uring_submit(ring_);
 
