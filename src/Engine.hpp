@@ -27,7 +27,7 @@ class Engine {
    ~Engine();
    void SetupListeningSocket(int port);
    void Run();
-   struct io_uring ring_;
+   struct io_uring *ring_;
 
   private:
    int socket_;

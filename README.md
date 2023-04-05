@@ -67,6 +67,7 @@ wget http://localhost/upload.wikimedia.org/wikipedia/commons/3/35/Tux.svg
 - __-hls__ Enable hls mode
 - __-silent__ Disable all logs
 - __-server-port=###__ Define the listener port, default 8000
+- __-dns-port=###__ Define the dns listener port, default 50053
 - __-buffer-size=###__ Buffer I/O size
 - __-no-cache__ Diable the cache storage
 

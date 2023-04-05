@@ -8,6 +8,7 @@ class Settings {
    static bool UseSSL;
    static int HttpBufferSize;
    static int ServerPort;
+   static int DnsPort;
    static std::string CacheDir;
    static bool UseCache;
 };

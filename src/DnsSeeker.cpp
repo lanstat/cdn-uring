@@ -12,6 +12,7 @@
 #include <iostream>
 
 #include "Logger.hpp"
+#include "Settings.hpp"
 
 struct __attribute__((__packed__)) dns_query {
     uint16_t id;
@@ -147,7 +148,7 @@ bool DnsSeeker::tryOpenSocket() {
         sockaddr_in si_me;
         memset((char *)&si_me, 0, sizeof(si_me));
         si_me.sin_family = AF_INET;
-        si_me.sin_port = htons(50053);
+        si_me.sin_port = htons(Settings::DnsPort);
         si_me.sin_addr.s_addr = htonl(INADDR_ANY);
         if (bind(fd, (struct sockaddr *)&si_me, sizeof(si_me)) == -1) {
             std::cerr << "unable to bind UDP socket, errno: " << errno
@@ -175,7 +176,7 @@ bool DnsSeeker::tryOpenSocket() {
         sockaddr_in6 si_me;
         memset((char *)&si_me, 0, sizeof(si_me));
         si_me.sin6_family = AF_INET6;
-        si_me.sin6_port = htons(50054);
+        si_me.sin6_port = htons(Settings::DnsPort + 1);
         si_me.sin6_addr = IN6ADDR_ANY_INIT;
         if (bind(fd, (struct sockaddr *)&si_me, sizeof(si_me)) == -1) {
             std::cerr << "unable to bind UDP socket, errno: " << errno

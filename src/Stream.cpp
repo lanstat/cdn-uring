@@ -49,7 +49,6 @@ void Stream::AddWriteHeaders(struct Request *stream, struct Mux *mux) {
 void Stream::HandleWriteHeaders(struct Request *stream) {
    struct Mux *mux = resources_.at(stream->resource_id);
    stream->pivot = mux->count;
-   //AddWriteStreamRequest(stream);
 }
 
 struct Mux *Stream::CreateMux() {

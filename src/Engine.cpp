@@ -7,8 +7,6 @@
 #include "Settings.hpp"
 #include "Utils.hpp"
 
-#define READ_SZ 8192
-
 void PrintRequestType(int type) {
    std::string type_str;
    switch (type) {
@@ -81,6 +79,8 @@ Engine::Engine() {
    } else {
       http_ = new HttpClient();
    }
+
+   ring_ = (struct io_uring *)malloc(sizeof(struct io_uring));
 }
 
 Engine::~Engine() {
@@ -89,6 +89,8 @@ Engine::~Engine() {
    delete cache_;
    delete stream_;
    delete http_;
+
+   free(ring_);
 }
 
 /*
@@ -139,14 +141,14 @@ void Engine::SetupListeningSocket(int port) {
 
 int Engine::AddAcceptRequest(int server_socket, struct sockaddr_in *client_addr,
                              socklen_t *client_addr_len) {
-   struct io_uring_sqe *sqe = io_uring_get_sqe(&ring_);
+   struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
    io_uring_prep_accept(sqe, server_socket, (struct sockaddr *)client_addr,
                         client_addr_len, 0);
    struct Request *req = (Request *)malloc(sizeof(*req));
    req->event_type = EVENT_TYPE_ACCEPT;
    req->iovec_count = 0;
    io_uring_sqe_set_data(sqe, req);
-   io_uring_submit(&ring_);
+   io_uring_submit(ring_);
 
    return 0;
 }
@@ -156,17 +158,17 @@ void Engine::Run() {
    struct sockaddr_in client_addr;
    socklen_t client_addr_len = sizeof(client_addr);
 
-   server_->SetRing(&ring_);
+   server_->SetRing(ring_);
 
    stream_->SetServer(server_);
-   stream_->SetRing(&ring_);
+   stream_->SetRing(ring_);
 
-   cache_->SetRing(&ring_);
+   cache_->SetRing(ring_);
    cache_->SetStream(stream_);
 
-   dns_->SetRing(&ring_);
+   dns_->SetRing(ring_);
 
-   http_->SetRing(&ring_);
+   http_->SetRing(ring_);
    http_->SetCache(cache_);
    http_->SetStream(stream_);
 
@@ -175,7 +177,7 @@ void Engine::Run() {
    // cache_->AddVerifyRequest();
 
    while (1) {
-      int ret = io_uring_wait_cqe(&ring_, &cqe);
+      int ret = io_uring_wait_cqe(ring_, &cqe);
       if (ret < 0) {
          FatalError("io_uring_wait_cqe");
       }
@@ -267,8 +269,6 @@ void Engine::Run() {
       }
 
       /* Mark this request as processed */
-      io_uring_cqe_seen(&ring_, cqe);
+      io_uring_cqe_seen(ring_, cqe);
    }
-   std::cout << "LAN_[" << __FILE__ << ":" << __LINE__ << "] "
-             << "asdad" << std::endl;
 }

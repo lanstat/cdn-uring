@@ -8,4 +8,6 @@ std::string Settings::CacheDir = "";
 
 int Settings::ServerPort = 8000;
 
+int Settings::DnsPort = 50053;
+
 bool Settings::UseCache = true;

@@ -102,6 +102,7 @@ inline std::string &trim(std::string &s, const char *t = ws) {
 }
 
 int Http::GetResourceType(char *header, int size) {
+   std::cout<< "LAN_[" << __FILE__ << ":" << __LINE__ << "] "<< header << std::endl;
    return RESOURCE_TYPE_STREAMING;
 }
 
