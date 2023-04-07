@@ -1,5 +1,9 @@
 #include "Cache.hpp"
 
+#include <fcntl.h>
+#include <liburing.h>
+#include <sys/stat.h>
+
 #include <cstring>
 
 #include "EventType.hpp"
@@ -80,16 +84,17 @@ void Cache::AddReadHeaderRequest(struct Request *inner) {
       return;
    }
 
-   //struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
-   //cache->iov[2].iov_base = malloc(Settings::HttpBufferSize);
-   //cache->iov[2].iov_len = Settings::HttpBufferSize;
-   //cache->event_type = EVENT_TYPE_CACHE_READ_HEADER;
-   //memset(cache->iov[2].iov_base, 0, Settings::HttpBufferSize);
+   // struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
+   // cache->iov[2].iov_base = malloc(Settings::HttpBufferSize);
+   // cache->iov[2].iov_len = Settings::HttpBufferSize;
+   // cache->event_type = EVENT_TYPE_CACHE_READ_HEADER;
+   // memset(cache->iov[2].iov_base, 0, Settings::HttpBufferSize);
 
-   //io_uring_prep_readv(sqe, fd, &cache->iov[2], 1, 0);
-   //// io_uring_prep_read(sqe, fd, &request->iov[2].iov_base, stx->stx_size, 0);
-   //io_uring_sqe_set_data(sqe, cache);
-   //io_uring_submit(ring_);
+   // io_uring_prep_readv(sqe, fd, &cache->iov[2], 1, 0);
+   //// io_uring_prep_read(sqe, fd, &request->iov[2].iov_base, stx->stx_size,
+   ///0);
+   // io_uring_sqe_set_data(sqe, cache);
+   // io_uring_submit(ring_);
 }
 
 int Cache::HandleReadHeader(struct Request *cache, int readed) {
@@ -167,7 +172,7 @@ int Cache::HandleWrite(struct Request *cache) {
    cache->iov[0].iov_len = node->buffer[cache->pivot].iov_len;
    memcpy(cache->iov[0].iov_base, node->buffer[cache->pivot].iov_base,
           cache->iov[0].iov_len);
-   
+
    cache->pivot++;
    cache->pivot %= Settings::CacheBufferSize;
 
@@ -180,7 +185,7 @@ int Cache::HandleWrite(struct Request *cache) {
    io_uring_sqe_set_data(sqe, cache);
    io_uring_submit(ring_);
 
-   //stream_->NotifyStream(uint64_t resource_id, void *buffer, int size)
+   // stream_->NotifyStream(uint64_t resource_id, void *buffer, int size)
 
    return 0;
 }
@@ -212,6 +217,4 @@ bool Cache::GenerateNode(struct Request *http) {
    return true;
 }
 
-void Cache::CloseBuffer(uint64_t resource_id) {
-
-}
+void Cache::CloseBuffer(uint64_t resource_id) {}

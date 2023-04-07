@@ -1,6 +1,9 @@
 #include "HttpClient.hpp"
 
 #include <arpa/inet.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include <cstring>
 #include <sstream>

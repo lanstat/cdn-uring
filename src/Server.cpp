@@ -2,6 +2,7 @@
 
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
 
 #include "EventType.hpp"
 #include "Logger.hpp"

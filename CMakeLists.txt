@@ -1,17 +1,15 @@
 cmake_minimum_required(VERSION 3.5)
 
-project(cdn LANGUAGES CXX)
+PROJECT(cdn LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+SET(CMAKE_CXX_STANDARD 17)
+SET(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-SET(GCC_COVERAGE_COMPILE_FLAGS "-Wall -g -luring -lssl -lcrypto")
-SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} ${GCC_COVERAGE_COMPILE_FLAGS}")
+FILE(GLOB_RECURSE sources src/*.cpp src/*.hpp src/*.h)
 
-file(GLOB_RECURSE sources src/*.cpp src/*.hpp src/*.h)
+ADD_EXECUTABLE(cdn main.cpp ${sources})
 
-add_executable(cdn main.cpp ${sources})
-
-install(TARGETS cdn 
+INSTALL(TARGETS cdn 
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
+TARGET_LINK_LIBRARIES(cdn -Wall -g -luring -lssl -lcrypto)
