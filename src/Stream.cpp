@@ -8,8 +8,6 @@
 #include "Utils.hpp"
 #include "xxhash64.h"
 
-#define BUFFER_PACKET_SIZE 10
-
 Stream::Stream() { server_ = nullptr; }
 
 void Stream::SetServer(Server *server) { server_ = server; }
@@ -48,26 +46,15 @@ void Stream::AddWriteHeaders(struct Request *stream, struct Mux *mux) {
 
 void Stream::HandleWriteHeaders(struct Request *stream) {
    struct Mux *mux = resources_.at(stream->resource_id);
-   stream->pivot = mux->count;
+   stream->pivot = mux->pivot;
 }
 
-struct Mux *Stream::CreateMux() {
-   std::vector<struct Request *> requests;
-   std::vector<struct iovec> buffer;
-
-   struct Mux *mux = new Mux();
-   mux->requests = requests;
-   mux->count = 0;
-   mux->buffer = buffer;
-   mux->type = RESOURCE_TYPE_UNDEFINED;
-   return mux;
-}
-
-void Stream::SetCacheResource(uint64_t resource_id, struct Request *cache) {
+void Stream::SetCacheResource(uint64_t resource_id, struct Request *cache,
+                              std::string path) {
    struct Mux *mux = resources_.at(resource_id);
    mux->type = RESOURCE_TYPE_CACHE;
 
-   mux->path = std::string((char *)cache->iov[1].iov_base);
+   mux->path = path;
 
    mux->header.iov_len = cache->iov[2].iov_len;
    mux->header.iov_base = malloc(cache->iov[2].iov_len);
@@ -80,10 +67,9 @@ void Stream::SetCacheResource(uint64_t resource_id, struct Request *cache) {
    }
 }
 
-void Stream::SetTypeResource(uint64_t resource_id, int type,
-                             struct Request *http) {
+void Stream::SetStreamingResource(uint64_t resource_id, struct Request *http) {
    struct Mux *mux = resources_.at(resource_id);
-   mux->type = type;
+   mux->type = RESOURCE_TYPE_STREAMING;
 
    mux->header.iov_len = http->iov[0].iov_len;
    mux->header.iov_base = malloc(http->iov[0].iov_len);
@@ -112,14 +98,20 @@ int Stream::NotifyStream(uint64_t resource_id, void *buffer, int size) {
       return 1;
    }
 
-   struct iovec packet;
-   packet.iov_base = malloc(size);
-   packet.iov_len = size;
-   memcpy(packet.iov_base, buffer, size);
+   unsigned int pivot = mux->pivot;
+   if (mux->buffer[pivot].iov_len == 0) {
+      mux->buffer[pivot].iov_base = malloc(Settings::HttpBufferSize);
+   }
 
-   // Store the packet in the buffer
-   mux->buffer.push_back(packet);
-   mux->count++;
+   mux->buffer[pivot].iov_len = size;
+   memcpy(mux->buffer[pivot].iov_base, buffer, size);
+
+   mux->pivot++;
+   mux->pivot %= Settings::StreamingBufferSize;
+
+   if (mux->buffer[mux->pivot].iov_len != 0) {
+      mux->buffer[mux->pivot].iov_len = EMPTY_BUFFER;
+   }
 
    for (struct Request *const c : mux->requests) {
       if (!c->is_processing) {
@@ -132,20 +124,22 @@ int Stream::NotifyStream(uint64_t resource_id, void *buffer, int size) {
 int Stream::AddWriteStreamRequest(struct Request *stream) {
    struct Mux *mux = resources_.at(stream->resource_id);
 
-   if (mux->count <= stream->pivot) {
+   size_t size = mux->buffer[stream->pivot].iov_len;
+
+   if (size == EMPTY_BUFFER || size == 0) {
       return 1;
    }
 
    unsigned int buffer_pivot = stream->pivot;
 
-   //if (mux->buffer.find(buffer_pivot) == mux->buffer.end()) {
-      //buffer_pivot = mux->count - 1;
-   //}
-   stream->iov[0].iov_len = mux->buffer.at(buffer_pivot).iov_len;
-   memcpy(stream->iov[0].iov_base, mux->buffer.at(buffer_pivot).iov_base,
+   stream->iov[0].iov_len = size;
+   memcpy(stream->iov[0].iov_base, mux->buffer[buffer_pivot].iov_base,
           stream->iov[0].iov_len);
+
    buffer_pivot++;
    stream->pivot = buffer_pivot;
+   stream->pivot %= Settings::StreamingBufferSize;
+
    server_->AddWriteRequest(stream, true);
 
    return 0;
@@ -165,26 +159,38 @@ void Stream::ReleaseErrorAllWaitingRequest(uint64_t resource_id,
    ReleaseResource(resource_id);
 }
 
+struct Mux *Stream::CreateMux() {
+   struct Mux *mux = new Mux();
+   std::vector<struct Request *> requests;
+
+   mux->requests = requests;
+   mux->pivot = 0;
+   mux->buffer = new iovec[Settings::StreamingBufferSize];
+   mux->type = RESOURCE_TYPE_UNDEFINED;
+   mux->header.iov_len = 0;
+
+   for (int i = 0; i < Settings::StreamingBufferSize; i++) {
+      mux->buffer[i].iov_len = 0;
+   }
+   
+   return mux;
+}
+
 void Stream::ReleaseResource(uint64_t resource_id) {
    struct Mux *mux = resources_.at(resource_id);
 
-   //int size = (int)mux->header.size();
-   //for (int i = 0; i < size; i++) {
-      //if (mux->header.at(i).iov_len > 0) {
-         //free(mux->header.at(i).iov_base);
-      //}
-   //}
-   //mux->header.clear();
-   free(mux->header.iov_base);
+   if (mux->header.iov_len > 0) {
+      free(mux->header.iov_base);
+   }
 
-   int size = (int)mux->buffer.size();
+   int size = Settings::StreamingBufferSize;
    for (int i = 0; i < size; i++) {
-      if (mux->buffer.at(i).iov_len > 0) {
-         free(mux->buffer.at(i).iov_base);
+      if (mux->buffer[i].iov_len > 0) {
+         free(mux->buffer[i].iov_base);
       }
    }
-   mux->buffer.clear();
 
+   delete[] mux->buffer;
    delete mux;
    resources_.erase(resource_id);
 }

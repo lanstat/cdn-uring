@@ -1,4 +1,5 @@
 #include "Utils.hpp"
+#include "Settings.hpp"
 
 #include <climits>
 
@@ -55,20 +56,6 @@ struct Request *Utils::HttpErrorRequest() {
 }
 
 /*
- * Object for http inner request 
- *
- * 0 = char* path requested by the client eg. google.com/images
- * 1 = char* guid for the cache resource
- * 2 = char* header of the external client
- * 3 = statx* status of the resource in cache
- * 4 = sockaddr_in|sockaddr_in6 * pointer to external server
- * 5 = void* response content
- */
-struct Request *Utils::HttpInnerRequest() {
-   return CreateRequest(6);
-}
-
-/*
  * Object for http external request 
  *
  * 0 = void* bytes bytes readed for the request
@@ -114,9 +101,23 @@ struct Request *Utils::StreamRequest(struct Request *entry) {
  * 3 = char* client header 
  * 4 = sockaddr_in|sockaddr_in6 * pointer to external server
  */
-struct Request *Utils::CacheRequest(struct Request *entry) {
+struct Request *Utils::InnerRequest(struct Request *entry) {
    struct Request *request = CreateRequest(5);
    request->resource_id = entry->resource_id;
+
+   return request;
+}
+
+/*
+ * Object for stream request 
+ *
+ * 0 = void* bytes to w to client socket
+ */
+struct Request *Utils::CacheRequest(struct Request *entry) {
+   struct Request *request = CreateRequest(1);
+   request->resource_id = entry->resource_id;
+   request->iov[0].iov_base = malloc(Settings::HttpBufferSize);
+   request->iov[0].iov_len = Settings::HttpBufferSize;
 
    return request;
 }

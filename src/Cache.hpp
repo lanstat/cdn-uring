@@ -31,24 +31,24 @@ class Cache {
    void AddReadHeaderRequest(struct Request *cache);
    int HandleReadHeader(struct Request *cache, int readed);
 
-   void AddWriteRequest(struct Request *request);
-   int HandleWrite(struct Request *request);
+   bool AppendBuffer(uint64_t resource_id, void* buffer, int length);
+   void CloseBuffer(uint64_t resource_id);
 
-   /*
-   void CloseStream(uint64_t resource_id);
-   int AddWriteRequestStream(uint64_t resource_id, void *buffer, int size);
-   int AddWriteRequestStream(struct Request *request);
-   int HandleWriteStream(struct Request *request);
+   void AddWriteRequest(struct Request *http);
+   int HandleWrite(struct Request *cache);
 
-   void ReleaseErrorAllWaitingRequest(struct Request *request, int status_code);
-   void ReleaseAllWaitingRequest(struct Request *request);
-
-   int RemoveRequest(struct Request *request);
-   */
+   bool GenerateNode(struct Request *http);
 
   private:
+   struct Node {
+    unsigned int pivot;
+    struct Request *cache;
+    struct iovec buffer[];
+   };
+
    struct io_uring *ring_;
    Stream *stream_;
+   std::unordered_map<uint64_t, struct Node*> nodes_;
 
    std::string GetCachePath(uint64_t resource_id);
 };

@@ -225,6 +225,9 @@ void Engine::Run() {
          case EVENT_TYPE_CACHE_EXISTS:
             if (!cache_->HandleExists(request)) {
                dns_->AddFetchAAAARequest(request, Settings::UseSSL);
+            } else {
+               cache_->AddReadHeaderRequest(request);
+               Utils::ReleaseRequest(request);
             }
             break;
          case EVENT_TYPE_CACHE_READ_HEADER:
@@ -239,7 +242,7 @@ void Engine::Run() {
             server_->AddWriteRequest(request, false);
             break;
          case EVENT_TYPE_CACHE_WRITE_CONTENT:
-            // TODO(lanstat): Add stream buffer for cache
+            cache_->HandleWrite(request);
             break;
          case EVENT_TYPE_CACHE_CLOSE:
             // TODO(lanstat): Add close cache

@@ -11,5 +11,7 @@ class Settings {
    static int DnsPort;
    static std::string CacheDir;
    static bool UseCache;
+   static int CacheBufferSize;
+   static int StreamingBufferSize;
 };
 #endif

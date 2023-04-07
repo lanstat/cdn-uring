@@ -12,8 +12,8 @@ class Stream {
    void SetRing(struct io_uring *ring);
    void SetServer(Server *server);
 
-   void SetCacheResource(uint64_t resource_id, struct Request *cache);
-   void SetTypeResource(uint64_t resource_id, int type, struct Request *http);
+   void SetCacheResource(uint64_t resource_id, struct Request *cache, std::string path);
+   void SetStreamingResource(uint64_t resource_id, struct Request *http);
 
    void AddWriteHeaders(struct Request *stream, struct Mux *mux);
    void HandleWriteHeaders(struct Request *stream);

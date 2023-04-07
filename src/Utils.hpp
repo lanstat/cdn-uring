@@ -15,9 +15,9 @@ class Utils {
    static struct Request *CreateRequest(int iovec_count);
    static struct Request *HttpEntryRequest();
    static struct Request *StreamRequest(struct Request *entry);
+   static struct Request *InnerRequest(struct Request *entry);
    static struct Request *CacheRequest(struct Request *entry);
    static struct Request *HttpErrorRequest();
-   static struct Request *HttpInnerRequest();
    static struct Request *HttpExternalRequest(struct Request *cache);
    static struct Request *HttpsExternalRequest();
    static void ReleaseRequest(struct Request *request);

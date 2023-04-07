@@ -11,3 +11,7 @@ int Settings::ServerPort = 8000;
 int Settings::DnsPort = 50053;
 
 bool Settings::UseCache = true;
+
+int Settings::CacheBufferSize = 64;
+
+int Settings::StreamingBufferSize = 256;

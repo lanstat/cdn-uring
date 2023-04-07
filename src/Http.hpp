@@ -31,16 +31,8 @@ class Http {
   struct io_uring *ring_;
   Cache *cache_;
   Stream *stream_;
-  std::unordered_map<uint64_t, struct HttpRequest *> waiting_read_;
 
-  int FetchHeader(void *src);
   virtual void ReleaseSocket(struct Request *request) = 0;
-  struct Request *UnifyBuffer(struct Request *request);
   int GetResourceType(char *header, int size);
-
- private:
-  void *zero_;
-
-  std::string CreateHeader(char *prev_header);
 };
 #endif
