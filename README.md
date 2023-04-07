@@ -1,6 +1,8 @@
 <h1 align="center">CDN Uring</h1>
 <div align="center">
-[![CMake](https://github.com/lanstat/cdn-uring/actions/workflows/cmake.yml/badge.svg)](https://github.com/lanstat/cdn-uring/actions/workflows/cmake.yml)
+
+![CMake](https://github.com/lanstat/cdn-uring/actions/workflows/cmake.yml/badge.svg)
+![gem](https://img.shields.io/badge/platform-linux--x64%20%7C%20linux--x32%20%7C%20linux--arm-orange)
 
   <strong>CDN/HLS powered by liburing</strong>
 </div>
@@ -25,6 +27,11 @@ Kernel 5.6+
 #### Ubuntu
 ```sh
 sudo apt-get install -y libssl-dev liburing-dev
+```
+
+#### Archlinux
+```sh
+sudo pacman -S liburing openssl
 ```
 
 #### Make
