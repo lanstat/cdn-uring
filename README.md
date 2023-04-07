@@ -1,5 +1,7 @@
 <h1 align="center">CDN Uring</h1>
 <div align="center">
+[![CMake](https://github.com/lanstat/cdn-uring/actions/workflows/cmake.yml/badge.svg)](https://github.com/lanstat/cdn-uring/actions/workflows/cmake.yml)
+
   <strong>CDN/HLS powered by liburing</strong>
 </div>
 <div align="center">
@@ -8,12 +10,24 @@
 
 <br />
 
+
 ## Table of Contents
 - [Build](#build)
 - [Usage](#usage)
 - [TODO](#todo)
 
-## Build 
+## Build
+
+### Prerequisites
+
+Kernel 5.6+
+
+#### Ubuntu
+```sh
+sudo apt-get install -y libssl-dev liburing-dev
+```
+
+#### Make
 ```sh
 cd build
 cmake ../
@@ -72,6 +86,5 @@ wget http://localhost/upload.wikimedia.org/wikipedia/commons/3/35/Tux.svg
 - __-no-cache__ Diable the cache storage
 
 ## TODO
-- Add buffer cleaner
-- Add stream manager
+- Add cache manager
 
