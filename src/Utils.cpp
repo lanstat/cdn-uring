@@ -82,10 +82,9 @@ struct Request *Utils::HttpsExternalRequest() {
  * Object for stream request 
  *
  * 0 = void* bytes to r/w to client socket
- * 1 = int cache's file descriptor
  */
 struct Request *Utils::StreamRequest(struct Request *entry) {
-   struct Request *request = CreateRequest(2);
+   struct Request *request = CreateRequest(1);
    request->resource_id = entry->resource_id;
    request->client_socket = entry->client_socket;
 

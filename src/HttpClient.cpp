@@ -1,5 +1,7 @@
 #include "HttpClient.hpp"
 
+#pragma GCC diagnostic ignored "-Wpointer-arith"
+
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -22,7 +24,6 @@ bool HttpClient::HandleFetchRequest(struct Request *inner, bool ipv4) {
    std::string query = url.substr(pos);
 
    Log(__FILE__, __LINE__) << query;
-
    int sock = -1;
    int is_connected = -1;
 
@@ -97,11 +98,20 @@ int HttpClient::HandleReadHeaderRequest(struct Request *http, int readed) {
 
    int type = GetResourceType((char *)http->iov[0].iov_base, readed);
 
-   http->iov[0].iov_len = readed;
-
    if (type == RESOURCE_TYPE_CACHE) {
+      int header_length =
+          FetchHeaderLength((char *)http->iov[0].iov_base, readed);
+
+      http->iov[0].iov_len = header_length;
       cache_->GenerateNode(http);
+
+      if (header_length < readed) {
+         cache_->AppendBuffer(http->resource_id,
+                              http->iov[0].iov_base + header_length,
+                              readed - header_length);
+      }
    } else if (type == RESOURCE_TYPE_STREAMING) {
+      http->iov[0].iov_len = readed;
       stream_->SetStreamingResource(http->resource_id, http);
    }
 

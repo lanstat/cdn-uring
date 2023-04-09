@@ -11,7 +11,6 @@
 #include "xxhash64.h"
 
 #define READ_SZ 8192
-#define SOCKET_CLOSED -32
 
 const char *http_400_content =
     "HTTP/1.0 400 Bad Request\r\n"
@@ -157,13 +156,9 @@ int Server::FetchHeader(const char *src, char *command, char *header,
    return 0;
 }
 
-void Server::AddWriteRequest(struct Request *stream, bool is_stream) {
+void Server::AddWriteRequest(struct Request *stream, int event_type) {
    struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
-   if (is_stream) {
-      stream->event_type = EVENT_TYPE_SERVER_WRITE_PARTIAL;
-   } else {
-      stream->event_type = EVENT_TYPE_SERVER_WRITE_COMPLETE;
-   }
+   stream->event_type = event_type;
    stream->is_processing = true;
    io_uring_prep_write(sqe, stream->client_socket, stream->iov[0].iov_base,
                        stream->iov[0].iov_len, 0);

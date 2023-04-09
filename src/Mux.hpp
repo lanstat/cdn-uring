@@ -3,15 +3,17 @@
 
 #include <liburing.h>
 
+#include <string>
 #include <unordered_map>
 #include <vector>
-#include <string>
 
 #include "Request.hpp"
 
-struct File {
-   void *data;
+struct Node {
+   unsigned int pivot;
    size_t size;
+   struct Request *cache;
+   struct iovec *buffer;
 };
 
 struct Mux {
@@ -19,7 +21,8 @@ struct Mux {
    struct iovec header;
    unsigned int pivot;
    int type;
+   bool is_completed;
    std::string path;
-   struct iovec* buffer;
+   struct iovec *buffer;
 };
 #endif

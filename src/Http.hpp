@@ -34,5 +34,10 @@ class Http {
 
   virtual void ReleaseSocket(struct Request *request) = 0;
   int GetResourceType(char *header, int size);
+
+  int FetchHeaderLength(char *header, int size);
+  bool IsLastPacket(void *buffer, int size);
+ private:
+  void *zero_;
 };
 #endif

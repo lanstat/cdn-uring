@@ -18,7 +18,7 @@ class Server {
    bool HandleRead(struct Request *entry_request);
 
    void AddWriteHeaderRequest(struct Request *request);
-   void AddWriteRequest(struct Request *request, bool is_stream);
+   void AddWriteRequest(struct Request *request, int event_type);
    void HandleWrite(struct Request *request, int response);
    int HandleWriteStream(struct Request *request, int response);
 

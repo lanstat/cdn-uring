@@ -47,7 +47,7 @@ make
 ```sh
 ./cdn [arguments]
 ./cdn -ssl -server-port=8001 &
-./cdn -server-port=8000 &
+./cdn -server-port=8000 -dns-port=50060 &
 ```
 ### Nginx
 ```nginx
@@ -93,5 +93,6 @@ wget http://localhost/upload.wikimedia.org/wikipedia/commons/3/35/Tux.svg
 - __-no-cache__ Diable the cache storage
 
 ## TODO
-- Add cache manager
+- Add perfomance test
+- Add ssl support
 

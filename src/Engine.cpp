@@ -234,18 +234,20 @@ void Engine::Run() {
             cache_->HandleReadHeader(request, response);
             break;
          case EVENT_TYPE_CACHE_READ_CONTENT:
-            cache_->HandleRead(request);
-            server_->AddWriteRequest(request, false);
+            if (!stream_->HandleReadCacheRequest(request, response)) {
+               stream_->RemoveRequest(request);
+            }
+            break;
+         case EVENT_TYPE_CACHE_COPY_CONTENT:
+            stream_->HandleCopyCacheRequest(request, response);
             break;
          case EVENT_TYPE_CACHE_WRITE_HEADER:
-            cache_->HandleWrite(request);
-            server_->AddWriteRequest(request, false);
+            cache_->HandleWriteHeader(request, response);
             break;
          case EVENT_TYPE_CACHE_WRITE_CONTENT:
             cache_->HandleWrite(request);
             break;
          case EVENT_TYPE_CACHE_CLOSE:
-            // TODO(lanstat): Add close cache
             break;
          case EVENT_TYPE_DNS_VERIFY:
             dns_->HandleVerifyUDP();

@@ -75,7 +75,7 @@ void Cache::AddReadHeaderRequest(struct Request *inner) {
    std::string path = GetCachePath(inner->resource_id);
    path = path + "_h";
 
-   int fd = open(path.c_str(), O_RDONLY);
+   int fd = open(path.c_str(), O_RDONLY | O_NONBLOCK);
 
    if (fd < 0) {
       Log(__FILE__, __LINE__, Log::kError)
@@ -84,59 +84,24 @@ void Cache::AddReadHeaderRequest(struct Request *inner) {
       return;
    }
 
-   // struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
-   // cache->iov[2].iov_base = malloc(Settings::HttpBufferSize);
-   // cache->iov[2].iov_len = Settings::HttpBufferSize;
-   // cache->event_type = EVENT_TYPE_CACHE_READ_HEADER;
-   // memset(cache->iov[2].iov_base, 0, Settings::HttpBufferSize);
+   struct Request *cache = Utils::CacheRequest(inner);
+   cache->event_type = EVENT_TYPE_CACHE_READ_HEADER;
+   cache->client_socket = fd;
 
-   // io_uring_prep_readv(sqe, fd, &cache->iov[2], 1, 0);
-   //// io_uring_prep_read(sqe, fd, &request->iov[2].iov_base, stx->stx_size,
-   ///0);
-   // io_uring_sqe_set_data(sqe, cache);
-   // io_uring_submit(ring_);
-}
-
-int Cache::HandleReadHeader(struct Request *cache, int readed) {
-   std::string path((char *)cache->iov[1].iov_base);
-   cache->iov[2].iov_len = readed;
-   stream_->SetCacheResource(cache->resource_id, cache, path);
-   return 0;
-}
-
-void Cache::AddReadRequest(struct Request *request) {
-   struct statx *stx = (struct statx *)request->iov[2].iov_base;
-
-   char *path = (char *)request->iov[1].iov_base;
-
-   int fd = open(path, O_RDONLY);
-
-   if (fd < 0) {
-      Log(__FILE__, __LINE__, Log::kError)
-          << "wrong file " << path << " " << strerror(errno);
-      stream_->ReleaseErrorAllWaitingRequest(request->resource_id, 502);
-      return;
-   }
    struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
-   request->iov[3].iov_base = malloc(stx->stx_size);
-   request->iov[3].iov_len = stx->stx_size;
-   request->event_type = EVENT_TYPE_CACHE_READ_CONTENT;
-   memset(request->iov[3].iov_base, 0, stx->stx_size);
-
-   /* Linux kernel 5.5 has support for readv, but not for recv() or read() */
-   io_uring_prep_readv(sqe, fd, &request->iov[3], 1, 0);
-   // io_uring_prep_read(sqe, fd, &request->iov[2].iov_base, stx->stx_size, 0);
-   io_uring_sqe_set_data(sqe, request);
+   io_uring_prep_read(sqe, fd, cache->iov[0].iov_base, cache->iov[0].iov_len,
+                      0);
+   io_uring_sqe_set_data(sqe, cache);
    io_uring_submit(ring_);
 }
 
-int Cache::HandleRead(struct Request *request) {
-   /*
-   StoreFileInMemory(request);
+int Cache::HandleReadHeader(struct Request *cache, int readed) {
+   std::string path = GetCachePath(cache->resource_id);
+   cache->iov[0].iov_len = readed;
+   stream_->SetCacheResource(cache->resource_id, cache, path, true);
 
-   ReleaseAllWaitingRequest(request);
-   */
-
+   close(cache->client_socket);
+   Utils::ReleaseRequest(cache);
    return 0;
 }
 
@@ -152,7 +117,9 @@ bool Cache::AppendBuffer(uint64_t resource_id, void *buffer, int length) {
    node->pivot++;
    node->pivot %= Settings::CacheBufferSize;
 
-   node->buffer[node->pivot].iov_len = EMPTY_BUFFER;
+   if (node->buffer[node->pivot].iov_len != 0) {
+      node->buffer[node->pivot].iov_len = EMPTY_BUFFER;
+   }
 
    if (!node->cache->is_processing) {
       HandleWrite(node->cache);
@@ -160,16 +127,56 @@ bool Cache::AppendBuffer(uint64_t resource_id, void *buffer, int length) {
    return true;
 }
 
+bool Cache::AddWriteHeaderRequest(struct Request *header, std::string path) {
+   path = path + "_h";
+   int fd = open(path.c_str(), O_CREAT | O_WRONLY | O_TRUNC,
+                 S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+   if (fd < 0) {
+      Log(__FILE__, __LINE__, Log::kError)
+          << "wrong write file " << path << " " << strerror(errno);
+      return false;
+   }
+
+   header->client_socket = fd;
+
+   struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
+   header->event_type = EVENT_TYPE_CACHE_WRITE_HEADER;
+
+   io_uring_prep_write(sqe, header->client_socket, header->iov[0].iov_base,
+                       header->iov[0].iov_len, 0);
+   io_uring_sqe_set_data(sqe, header);
+   io_uring_submit(ring_);
+
+   return true;
+}
+
+bool Cache::HandleWriteHeader(struct Request *cache, int writed) {
+   close(cache->client_socket);
+   Utils::ReleaseRequest(cache);
+   return true;
+}
+
 void Cache::AddWriteRequest(struct Request *cache) {}
 
 int Cache::HandleWrite(struct Request *cache) {
-   struct Node *node = nodes_.at(cache->resource_id);
-
-   if (node->buffer[cache->pivot].iov_len == EMPTY_BUFFER) {
+   if (nodes_.find(cache->resource_id) == nodes_.end()) {
       return 1;
    }
 
-   cache->iov[0].iov_len = node->buffer[cache->pivot].iov_len;
+   struct Node *node = nodes_.at(cache->resource_id);
+
+   size_t size = node->buffer[cache->pivot].iov_len;
+
+   if (size == EMPTY_BUFFER || size == 0) {
+      return 1;
+   }
+
+   if (size == END_BUFFER) {
+      ReleaseBuffer(cache->resource_id);
+      return 0;
+   }
+
+   cache->iov[0].iov_len = size;
    memcpy(cache->iov[0].iov_base, node->buffer[cache->pivot].iov_base,
           cache->iov[0].iov_len);
 
@@ -181,11 +188,11 @@ int Cache::HandleWrite(struct Request *cache) {
    cache->event_type = EVENT_TYPE_CACHE_WRITE_CONTENT;
 
    io_uring_prep_write(sqe, cache->client_socket, cache->iov[0].iov_base,
-                       cache->iov[0].iov_len, 0);
+                       cache->iov[0].iov_len, node->size);
    io_uring_sqe_set_data(sqe, cache);
    io_uring_submit(ring_);
 
-   // stream_->NotifyStream(uint64_t resource_id, void *buffer, int size)
+   node->size += size;
 
    return 0;
 }
@@ -203,18 +210,58 @@ bool Cache::GenerateNode(struct Request *http) {
    auto cache = Utils::CacheRequest(http);
    cache->client_socket = fd;
 
-   cache->iov[0].iov_len = http->iov[0].iov_len;
-   memcpy(cache->iov[0].iov_base, http->iov[0].iov_base, http->iov[0].iov_len);
-   stream_->SetCacheResource(http->resource_id, cache, path);
-   HandleWrite(cache);
+   auto header = Utils::CacheRequest(http);
+   header->iov[0].iov_len = http->iov[0].iov_len;
 
-   struct Node *node = (Node *)malloc(
-       sizeof(*node) + sizeof(struct iovec) * Settings::CacheBufferSize);
-   node->pivot = 0;
+   memcpy(header->iov[0].iov_base, http->iov[0].iov_base, http->iov[0].iov_len);
+   stream_->SetCacheResource(http->resource_id, header, path, false);
+   AddWriteHeaderRequest(header, path);
+
+   struct Node *node = CreateNode();
+   node->cache = cache;
    std::pair<uint64_t, struct Node *> item(http->resource_id, node);
    nodes_.insert(item);
 
    return true;
 }
 
-void Cache::CloseBuffer(uint64_t resource_id) {}
+void Cache::CloseBuffer(uint64_t resource_id) {
+   struct Node *node = nodes_.at(resource_id);
+   if (node->buffer[node->pivot].iov_len == 0) {
+      node->buffer[node->pivot].iov_base = malloc(1);
+   }
+
+   node->buffer[node->pivot].iov_len = END_BUFFER;
+}
+
+void Cache::ReleaseBuffer(uint64_t resource_id) {
+   struct Node *node = nodes_.at(resource_id);
+
+   int size = Settings::CacheBufferSize;
+   for (int i = 0; i < size; i++) {
+      if (node->buffer[i].iov_len > 0) {
+         free(node->buffer[i].iov_base);
+      }
+   }
+
+   close(node->cache->client_socket);
+
+   delete[] node->buffer;
+   delete node;
+   nodes_.erase(resource_id);
+
+   stream_->NotifyCache(resource_id, true);
+}
+
+struct Node *Cache::CreateNode() {
+   struct Node *node = new Node();
+   node->pivot = 0;
+   node->size = 0;
+   node->buffer = new iovec[Settings::CacheBufferSize];
+
+   for (int i = 0; i < Settings::CacheBufferSize; i++) {
+      node->buffer[i].iov_len = 0;
+   }
+
+   return node;
+}
