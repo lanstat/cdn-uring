@@ -51,7 +51,7 @@ void ParserArguments(int argc, char** argv) {
             continue;
         }
         if (strcmp(argv[i], "-hls") == 0) {
-            Settings::UseCache = false;
+            Settings::HLSMode = true;
             continue;
         }
     }

@@ -19,7 +19,7 @@ class Utils {
    static struct Request *CacheRequest(struct Request *entry);
    static struct Request *HttpErrorRequest();
    static struct Request *HttpExternalRequest(struct Request *cache);
-   static struct Request *HttpsExternalRequest();
+   static struct Request *HttpsExternalRequest(struct Request *inner);
    static void ReleaseRequest(struct Request *request);
 };
 #endif

@@ -63,6 +63,9 @@ void Dns::AddFetchAAAARequest(struct Request *request, bool isHttps) {
    std::size_t pos = host.find("/");
    host = host.substr(0, pos);
    int port = 80;
+   if (isHttps) {
+      port = 443;
+   }
 
    if (std::regex_match(host, ipv4_regex_)) {
       pos = host.find(":");

@@ -74,8 +74,11 @@ struct Request *Utils::HttpExternalRequest(struct Request *cache) {
  * 1 = SSL* ssl pointer
  * 2 = SSL_CTX* ssl context
  */
-struct Request *Utils::HttpsExternalRequest() {
-   return CreateRequest(3);
+struct Request *Utils::HttpsExternalRequest(struct Request *inner) {
+   struct Request *request = CreateRequest(3);
+   request->resource_id = inner->resource_id;
+
+   return request;
 }
 
 /*

@@ -36,7 +36,6 @@ class Http {
   int GetResourceType(char *header, int size);
 
   int FetchHeaderLength(char *header, int size);
-  bool IsLastPacket(void *buffer, int size);
  private:
   void *zero_;
 };

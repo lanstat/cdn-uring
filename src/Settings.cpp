@@ -15,3 +15,5 @@ bool Settings::UseCache = true;
 int Settings::CacheBufferSize = 64;
 
 int Settings::StreamingBufferSize = 256;
+
+bool Settings::HLSMode = false;

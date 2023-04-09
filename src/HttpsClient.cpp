@@ -1,5 +1,7 @@
 #include "HttpsClient.hpp"
 
+#pragma GCC diagnostic ignored "-Wpointer-arith"
+
 #include <arpa/inet.h>
 #include <openssl/err.h>
 #include <unistd.h>
@@ -15,9 +17,8 @@ HttpsClient::HttpsClient() : Http() {
    OPENSSL_init_ssl(OPENSSL_INIT_LOAD_SSL_STRINGS, NULL);
 }
 
-bool HttpsClient::HandleFetchRequest(struct Request *request, bool ipv4) {
-   /*
-   std::string url((char *)request->iov[0].iov_base);
+bool HttpsClient::HandleFetchRequest(struct Request *inner, bool ipv4) {
+   std::string url((char *)inner->iov[2].iov_base);
    url = url.substr(1);
    std::size_t pos = url.find("/");
    std::string host = url.substr(0, pos);
@@ -25,42 +26,54 @@ bool HttpsClient::HandleFetchRequest(struct Request *request, bool ipv4) {
 
    Log(__FILE__, __LINE__) << query;
 
-   struct sockaddr_in6 *client =
-       (struct sockaddr_in6 *)request->iov[4].iov_base;
-
    const SSL_METHOD *method = TLS_client_method();
    SSL_CTX *ctx = SSL_CTX_new(method);
    if (!ctx) {
       Log(__FILE__, __LINE__, Log::kError) << "Error creating context ssl";
-      cache_->ReleaseErrorAllWaitingRequest(request, 502);
-      return 1;
+      stream_->ReleaseErrorAllWaitingRequest(inner->resource_id, 502);
+      return false;
    }
 
    SSL *ssl = SSL_new(ctx);
    if (!ssl) {
       CloseSSL(-1, nullptr, ctx);
       Log(__FILE__, __LINE__, Log::kError) << "Error creating ssl";
-      cache_->ReleaseErrorAllWaitingRequest(request, 502);
-      Utils::ReleaseRequest(request);
-      return -1;
+      stream_->ReleaseErrorAllWaitingRequest(inner->resource_id, 502);
+      return false;
    }
 
-   int socket_fd = socket(AF_INET6, SOCK_STREAM, 0);
+   int socket_fd = -1;
+   int is_connected = -1;
+
+   if (ipv4) {
+      struct sockaddr_in *client = (struct sockaddr_in *)inner->iov[4].iov_base;
+      socket_fd = socket(AF_INET, SOCK_STREAM, 0);
+      if (socket_fd > 0) {
+         is_connected = connect(socket_fd, (struct sockaddr *)client,
+                                sizeof(struct sockaddr_in));
+      }
+   } else {
+      struct sockaddr_in6 *client =
+          (struct sockaddr_in6 *)inner->iov[4].iov_base;
+      socket_fd = socket(AF_INET6, SOCK_STREAM, 0);
+      if (socket_fd > 0) {
+         is_connected = connect(socket_fd, (struct sockaddr *)client,
+                                sizeof(struct sockaddr_in6));
+      }
+   }
+
    if (socket_fd < 0) {
-      CloseSSL(-1, ssl, ctx);
       Log(__FILE__, __LINE__, Log::kError) << "Error creating socket";
-      cache_->ReleaseErrorAllWaitingRequest(request, 502);
-      Utils::ReleaseRequest(request);
-      return 1;
+
+      stream_->ReleaseErrorAllWaitingRequest(inner->resource_id, 502);
+      return false;
    }
 
-   if (connect(socket_fd, (struct sockaddr *)client,
-               sizeof(struct sockaddr_in6)) < 0) {
+   if (is_connected < 0) {
       CloseSSL(socket_fd, ssl, ctx);
       Log(__FILE__, __LINE__, Log::kError) << "Could not connect ";
-      cache_->ReleaseErrorAllWaitingRequest(request, 502);
-      Utils::ReleaseRequest(request);
-      return 1;
+      stream_->ReleaseErrorAllWaitingRequest(inner->resource_id, 502);
+      return false;
    }
 
    SSL_set_fd(ssl, socket_fd);
@@ -68,91 +81,132 @@ bool HttpsClient::HandleFetchRequest(struct Request *request, bool ipv4) {
    if (err < 1) {
       CloseSSL(socket_fd, ssl, ctx);
       Log(__FILE__, __LINE__, Log::kError) << "Could not connect ";
-      cache_->ReleaseErrorAllWaitingRequest(request, 502);
-      Utils::ReleaseRequest(request);
-      return 1;
+      stream_->ReleaseErrorAllWaitingRequest(inner->resource_id, 502);
+      return false;
    }
 
    std::stringstream ss;
    ss << "GET " << query << " HTTP/1.2\r\n"
       << "Host: " << host << "\r\n"
-      << "Accept: *//*\r\n"
-      << "Connection: close\r\n"
-      << "\r\n\r\n";
+      << (char *)inner->iov[3].iov_base;
    std::string request_data = ss.str();
 
    if (SSL_write(ssl, request_data.c_str(), request_data.length()) < 0) {
       CloseSSL(socket_fd, ssl, ctx);
       Log(__FILE__, __LINE__, Log::kError) << "invalid socket";
-      cache_->ReleaseErrorAllWaitingRequest(request, 502);
-      Utils::ReleaseRequest(request);
+      stream_->ReleaseErrorAllWaitingRequest(inner->resource_id, 502);
+      return false;
+   }
+
+   struct Request *http = Utils::HttpsExternalRequest(inner);
+   http->event_type = EVENT_TYPE_HTTP_READ_HEADER;
+   http->client_socket = socket_fd;
+   http->pivot = RESOURCE_TYPE_UNDEFINED;
+   http->iov[0].iov_base = malloc(buffer_size_);
+   http->iov[0].iov_len = buffer_size_;
+   memset(http->iov[0].iov_base, 0, buffer_size_);
+   http->iov[1].iov_base = ssl;
+   http->iov[2].iov_base = ctx;
+
+   struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
+   // io_uring_prep_read(sqe, http->client_socket, http->iov[0].iov_base,
+   // buffer_size_, 0);
+   io_uring_prep_nop(sqe);
+   io_uring_sqe_set_data(sqe, http);
+   io_uring_submit(ring_);
+   return true;
+}
+
+int HttpsClient::ReadFromSSL(struct Request *http) {
+   SSL *ssl = (SSL *)http->iov[1].iov_base;
+   int readed = SSL_read(ssl, http->iov[0].iov_base, buffer_size_);
+   if (readed < 1) {
+      if (!ProcessError(ssl, readed)) {
+         return -1;
+      }
+      if (readed == 0) {
+         return 0;
+      }
+   }
+   return readed;
+}
+
+int HttpsClient::HandleReadHeaderRequest(struct Request *http, int response) {
+   int readed = ReadFromSSL(http);
+   if (readed <= 0) {
+      if (readed < 0) {
+         stream_->ReleaseErrorAllWaitingRequest(http->resource_id, 502);
+      } else {
+         stream_->CloseStream(http->resource_id);
+      }
+      ReleaseSocket(http);
       return 1;
    }
 
-   AddReadRequest(request, ssl, ctx, socket_fd);
+   int type = GetResourceType((char *)http->iov[0].iov_base, readed);
+
+   if (type == RESOURCE_TYPE_CACHE) {
+      int header_length =
+          FetchHeaderLength((char *)http->iov[0].iov_base, readed);
+
+      http->iov[0].iov_len = header_length;
+      cache_->GenerateNode(http);
+
+      if (header_length < readed) {
+         cache_->AppendBuffer(http->resource_id,
+                              http->iov[0].iov_base + header_length,
+                              readed - header_length);
+      }
+   } else if (type == RESOURCE_TYPE_STREAMING) {
+      http->iov[0].iov_len = readed;
+      stream_->SetStreamingResource(http->resource_id, http);
+   }
+
+   struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
+   http->event_type = EVENT_TYPE_HTTP_READ_CONTENT;
+   http->pivot = type;
+   io_uring_prep_nop(sqe);
+   io_uring_sqe_set_data(sqe, http);
+   io_uring_submit(ring_);
+
    return 0;
-   */
-   return false;
 }
 
-void HttpsClient::AddReadRequest(struct Request *request, SSL *ssl,
-                                 SSL_CTX *context, int fd) {
-   // struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
+int HttpsClient::HandleReadData(struct Request *http, int response) {
+   int type = http->pivot;
+   int readed = ReadFromSSL(http);
+   if (readed <= 0) {
+      if (readed < 0) {
+         stream_->ReleaseErrorAllWaitingRequest(http->resource_id, 502);
+      } else {
+         if (type == RESOURCE_TYPE_CACHE) {
+            cache_->CloseBuffer(http->resource_id);
+         } else if (type == RESOURCE_TYPE_STREAMING) {
+            stream_->CloseStream(http->resource_id);
+         }
+      }
+      ReleaseSocket(http);
+      return 1;
+   }
 
-   // struct HttpRequest *http_request = new HttpRequest();
-   // http_request->has_header = 0;
-   // std::pair<int, struct HttpRequest *> item(fd, http_request);
-   // waiting_read_.insert(item);
+   if (type == RESOURCE_TYPE_CACHE) {
+      cache_->AppendBuffer(http->resource_id, http->iov[0].iov_base, readed);
+   } else if (type == RESOURCE_TYPE_STREAMING) {
+      // If there is no listeners
+      if (stream_->NotifyStream(http->resource_id, http->iov[0].iov_base,
+                                readed) == 1) {
+         Log(__FILE__, __LINE__) << "HttpClient empty stream listeners";
+         ReleaseSocket(http);
+         return 1;
+      }
+   }
 
-   // struct Request *auxiliar = Utils::HttpsExternalRequest();
-   // auxiliar->event_type = EVENT_TYPE_HTTP_READ;
-   // auxiliar->client_socket = fd;
-   // auxiliar->iov[0].iov_base = malloc(buffer_size_);
-   // auxiliar->iov[0].iov_len = buffer_size_;
-   // auxiliar->iov[1].iov_base = ssl;
-   // auxiliar->iov[2].iov_base = context;
+   memset(http->iov[0].iov_base, 0, buffer_size_);
 
-   // memset(auxiliar->iov[0].iov_base, 0, buffer_size_);
-
-   // io_uring_prep_nop(sqe);
-   // io_uring_sqe_set_data(sqe, auxiliar);
-   // io_uring_submit(ring_);
-}
-
-int HttpsClient::HandleReadData(struct Request *request, int response) {
-   // SSL *ssl = (SSL *)request->iov[1].iov_base;
-   // int err = SSL_read(ssl, request->iov[0].iov_base, buffer_size_);
-   // if (err < 1) {
-   // if (!ProcessError(ssl, err)) {
-   // struct HttpRequest *http_request =
-   // waiting_read_.at(request->client_socket);
-   ////TODO(lanstat): verify when is finished
-   ////cache_->ReleaseErrorAllWaitingRequest(http_request->request, 502);
-   // ReleaseSocket(request);
-   // return 1;
-   //}
-   //}
-
-   // struct HttpRequest *http_request =
-   // waiting_read_.at(request->client_socket); int readed =
-   // FetchHeader(request->iov[0].iov_base); Log(__FILE__, __LINE__,
-   // Log::kDebug) << "bytes readed: " << readed; if (readed <= 0) { struct
-   // Request *client_request = UnifyBuffer(request); ReleaseSocket(request);
-   // cache_->AddWriteRequest(client_request);
-   // return 1;
-   //} else {
-   // struct iovec data;
-   // data.iov_base = malloc(readed);
-   // data.iov_len = readed;
-   // memcpy(data.iov_base, request->iov[0].iov_base, readed);
-   //}
-
-   // memset(request->iov[0].iov_base, 0, buffer_size_);
-
-   // struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
-   // io_uring_prep_nop(sqe);
-   // io_uring_sqe_set_data(sqe, request);
-   // io_uring_submit(ring_);
+   struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
+   io_uring_prep_nop(sqe);
+   io_uring_sqe_set_data(sqe, http);
+   io_uring_submit(ring_);
 
    return 0;
 }
@@ -170,23 +224,17 @@ void HttpsClient::CloseSSL(int socket_fd, SSL *ssl, SSL_CTX *context) {
 }
 
 void HttpsClient::ReleaseSocket(struct Request *request) {
-   // struct HttpRequest *http_request =
-   // waiting_read_.at(request->client_socket);
-   // waiting_read_.erase(request->client_socket);
+   free(request->iov[0].iov_base);
+   SSL *ssl = (SSL *)request->iov[1].iov_base;
+   SSL_CTX *context = (SSL_CTX *)request->iov[2].iov_base;
 
-   // free(request->iov[0].iov_base);
-   // SSL *ssl = (SSL *)request->iov[1].iov_base;
-   // SSL_CTX *context = (SSL_CTX *)request->iov[2].iov_base;
+   CloseSSL(request->client_socket, ssl, context);
 
-   // CloseSSL(request->client_socket, ssl, context);
-
-   // delete http_request;
-   // free(request);
+   free(request);
 }
 
 bool HttpsClient::ProcessError(SSL *ssl, int last_error) {
    int error = SSL_get_error(ssl, last_error);
-   Log(__FILE__, __LINE__, Log::kWarning) << "SSL error " << error;
    if (error == SSL_ERROR_NONE) {
       // if (last_error == SSL_ERROR_SYSCALL) {
       // return false;
@@ -194,12 +242,10 @@ bool HttpsClient::ProcessError(SSL *ssl, int last_error) {
       return true;
    } else if (error == SSL_ERROR_ZERO_RETURN) {
       SSL_shutdown(ssl);
+      return true;
    } else if (error == SSL_ERROR_SYSCALL) {
+      Log(__FILE__, __LINE__, Log::kWarning) << "SSL error " << error;
       return ProcessError(ssl, error);
    }
    return false;
-}
-
-int HttpsClient::HandleReadHeaderRequest(struct Request *http, int readed) {
-   return 0;
 }

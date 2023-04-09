@@ -22,9 +22,8 @@ class HttpsClient : public Http {
   int HandleReadHeaderRequest(struct Request *http, int readed) override;
 
  private:
-  void AddReadRequest(struct Request *request, SSL *ssl, SSL_CTX *context,
-                      int fd);
   void CloseSSL(int socket_fd, SSL *ssl, SSL_CTX *context);
+  int ReadFromSSL(struct Request *http);
 
  protected:
   void ReleaseSocket(struct Request *request) override;

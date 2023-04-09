@@ -94,5 +94,4 @@ wget http://localhost/upload.wikimedia.org/wikipedia/commons/3/35/Tux.svg
 
 ## TODO
 - Add perfomance test
-- Add ssl support
-
+- Add error handling on http external request
