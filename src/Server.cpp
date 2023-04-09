@@ -126,7 +126,8 @@ int Server::FetchHeader(const char *src, char *command, char *header,
    while (offset < dest_sz) {
       if (src[offset] == '\r' && src[offset + 1] == '\n' &&
           src[offset + 2] == '\r' && src[offset + 3] == '\n') {
-         offset += 4;
+         offset += 2;
+         
          break;
       }
       offset++;
@@ -137,10 +138,9 @@ int Server::FetchHeader(const char *src, char *command, char *header,
    }
 
    std::string header_raw(src);
+   header_raw = header_raw.substr(0, offset);
    std::size_t pos = header_raw.find("\r\n");
    std::string first_line = header_raw.substr(0, pos);
-   std::cout << "LAN_[" << __FILE__ << ":" << __LINE__ << "] " << first_line
-             << std::endl;
    std::string content = header_raw.substr(pos + 2);
 
    std::string pivot = "Host: ";

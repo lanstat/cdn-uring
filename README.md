@@ -95,3 +95,5 @@ wget http://localhost/upload.wikimedia.org/wikipedia/commons/3/35/Tux.svg
 ## TODO
 - Add perfomance test
 - Add error handling on http external request
+- Add admin manager
+- Add Log to file

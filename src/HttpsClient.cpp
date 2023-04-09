@@ -87,9 +87,9 @@ bool HttpsClient::HandleFetchRequest(struct Request *inner, bool ipv4) {
 
    std::stringstream ss;
    ss << "GET " << query << " HTTP/1.2\r\n"
-      << "Host: " << host << "\r\n"
-      << (char *)inner->iov[3].iov_base;
-   std::string request_data = ss.str();
+      << "Host: " << host << "\r\n";
+   std::string request_data =
+       ss.str() + GetExternalHeader((char *)inner->iov[3].iov_base);
 
    if (SSL_write(ssl, request_data.c_str(), request_data.length()) < 0) {
       CloseSSL(socket_fd, ssl, ctx);

@@ -34,8 +34,8 @@ class Http {
 
   virtual void ReleaseSocket(struct Request *request) = 0;
   int GetResourceType(char *header, int size);
-
   int FetchHeaderLength(char *header, int size);
+  std::string GetExternalHeader(char * header);
  private:
   void *zero_;
 };
