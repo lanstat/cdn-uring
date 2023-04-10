@@ -97,8 +97,8 @@ void Cache::AddReadHeaderRequest(struct Request *inner) {
 
 int Cache::HandleReadHeader(struct Request *cache, int readed) {
    std::string path = GetCachePath(cache->resource_id);
-   cache->iov[0].iov_len = readed;
-   stream_->SetCacheResource(cache->resource_id, cache, path, true);
+   std::string header_data((char*)cache->iov[0].iov_base);
+   stream_->SetCacheResource(cache->resource_id, header_data, path, true);
 
    close(cache->client_socket);
    Utils::ReleaseRequest(cache);
@@ -197,7 +197,7 @@ int Cache::HandleWrite(struct Request *cache) {
    return 0;
 }
 
-bool Cache::GenerateNode(struct Request *http) {
+bool Cache::GenerateNode(struct Request *http, std::string header_buffer) {
    std::string path = GetCachePath(http->resource_id);
    int fd = open(path.c_str(), O_CREAT | O_WRONLY | O_TRUNC,
                  S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
@@ -211,10 +211,11 @@ bool Cache::GenerateNode(struct Request *http) {
    cache->client_socket = fd;
 
    auto header = Utils::CacheRequest(http);
-   header->iov[0].iov_len = http->iov[0].iov_len;
+   header->iov[0].iov_len = header_buffer.size();
 
-   memcpy(header->iov[0].iov_base, http->iov[0].iov_base, http->iov[0].iov_len);
-   stream_->SetCacheResource(http->resource_id, header, path, false);
+   memcpy(header->iov[0].iov_base, header_buffer.c_str(), header->iov[0].iov_len);
+
+   stream_->SetCacheResource(http->resource_id, header_buffer, path, false);
    AddWriteHeaderRequest(header, path);
 
    struct Node *node = CreateNode();

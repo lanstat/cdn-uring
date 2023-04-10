@@ -1,9 +1,12 @@
 #include "Http.hpp"
 
+#pragma GCC diagnostic ignored "-Wpointer-arith"
+
 #include <arpa/inet.h>
 #include <string.h>
 
-#include <algorithm>
+#include <chrono>
+#include <ctime>
 #include <sstream>
 #include <vector>
 
@@ -13,6 +16,17 @@
 #include "Utils.hpp"
 
 #define ZERO_LENGTH 1
+
+const std::string GetEtag(uint64_t resource_id) {
+   time_t now = time(0);
+   struct tm tstruct;
+   char buf[80];
+   tstruct = *localtime(&now);
+   strftime(buf, sizeof(buf), "%Y%m%d%H%M%S", &tstruct);
+   std::string stamp(buf);
+
+   return "\"" + std::to_string(resource_id) + stamp + "\"";
+}
 
 Http::Http() {
    stream_ = nullptr;
@@ -51,41 +65,95 @@ int Http::FetchHeaderLength(char *header, int size) {
    return offset;
 }
 
-template <typename charT>
-struct my_equal {
-   my_equal(const std::locale &loc) : loc_(loc) {}
-   bool operator()(charT ch1, charT ch2) {
-      return std::toupper(ch1, loc_) == std::toupper(ch2, loc_);
-   }
-
-  private:
-   const std::locale &loc_;
-};
-
-template <typename T>
-int ci_find_substr(const T &str1, const T &str2,
-                   const std::locale &loc = std::locale()) {
-   typename T::const_iterator it =
-       std::search(str1.begin(), str1.end(), str2.begin(), str2.end(),
-                   my_equal<typename T::value_type>(loc));
-   if (it != str1.end()) {
-      return it - str1.begin();
-   } else {
-      return -1;  // not found
-   }
-}
-
 std::string Http::GetExternalHeader(char *header) {
    std::string tmp(header);
-   std::string test = "\r\nConnection:";
 
-   int pos = ci_find_substr(tmp, test);
-   if (pos < 0) {
-      tmp = tmp + "Connection: close\r\n";
-   } else {
-      std::string first = tmp.substr(0, pos);
-      std::string second = tmp.substr(pos + 2);
-      tmp = first + "\r\nConnection: close" + second.substr(second.find("\r\n"));
-   }
+   tmp = Utils::ReplaceHeaderTag(tmp, "Connection", "close");
    return tmp + "\r\n";
+}
+
+std::string Http::ProcessExternalHeader(struct Request *http) {
+   void *header = malloc(http->iov[0].iov_len);
+   memcpy(header, http->iov[0].iov_base, http->iov[0].iov_len);
+   std::string tmp((char *)header);
+   free(header);
+
+   tmp = Utils::ReplaceHeaderTag(tmp, "Server", "cdn/0.1.0");
+   tmp = Utils::ReplaceHeaderTag(tmp, "ETag", GetEtag(http->resource_id));
+
+   return tmp;
+}
+
+int Http::HandleReadHeaderRequest(struct Request *http, int readed) {
+   readed = PreRequest(http, readed);
+   if (readed <= 0) {
+      if (readed < 0) {
+         stream_->ReleaseErrorAllWaitingRequest(http->resource_id, 502);
+      } else {
+         stream_->CloseStream(http->resource_id);
+      }
+      ReleaseSocket(http);
+      return 1;
+   }
+
+   int type = GetResourceType((char *)http->iov[0].iov_base, readed);
+   int header_length = FetchHeaderLength((char *)http->iov[0].iov_base, readed);
+   http->iov[0].iov_len = header_length;
+   std::string new_header = ProcessExternalHeader(http);
+
+   if (type == RESOURCE_TYPE_CACHE) {
+      http->iov[0].iov_len = header_length;
+      cache_->GenerateNode(http, new_header);
+
+      if (header_length < readed) {
+         cache_->AppendBuffer(http->resource_id,
+                              http->iov[0].iov_base + header_length,
+                              readed - header_length);
+      }
+   } else if (type == RESOURCE_TYPE_STREAMING) {
+      http->iov[0].iov_len = readed;
+      stream_->SetStreamingResource(http->resource_id, new_header);
+   }
+   http->pivot = type;
+   http->event_type = EVENT_TYPE_HTTP_READ_CONTENT;
+
+   PostRequest(http);
+
+   return 0;
+}
+
+int Http::HandleReadData(struct Request *http, int readed) {
+   int type = http->pivot;
+   readed = PreRequest(http, readed);
+   if (readed <= 0) {
+      if (readed < 0) {
+         stream_->ReleaseErrorAllWaitingRequest(http->resource_id, 502);
+      } else {
+         if (type == RESOURCE_TYPE_CACHE) {
+            cache_->CloseBuffer(http->resource_id);
+         } else if (type == RESOURCE_TYPE_STREAMING) {
+            stream_->CloseStream(http->resource_id);
+         }
+      }
+      ReleaseSocket(http);
+      return 1;
+   }
+
+   if (type == RESOURCE_TYPE_CACHE) {
+      cache_->AppendBuffer(http->resource_id, http->iov[0].iov_base, readed);
+   } else if (type == RESOURCE_TYPE_STREAMING) {
+      // If there is no listeners
+      if (stream_->NotifyStream(http->resource_id, http->iov[0].iov_base,
+                                readed) == 1) {
+         Log(__FILE__, __LINE__) << "HttpClient empty stream listeners";
+         ReleaseSocket(http);
+         return 1;
+      }
+   }
+
+   memset(http->iov[0].iov_base, 0, buffer_size_);
+
+   PostRequest(http);
+
+   return 0;
 }

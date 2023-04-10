@@ -12,6 +12,11 @@
 
 #define READ_SZ 8192
 
+const char *http_304_content =
+    "HTTP/1.0 304 Not Modified\r\n"
+    "Content-type: text/plain\r\n"
+    "\r\n";
+
 const char *http_400_content =
     "HTTP/1.0 400 Bad Request\r\n"
     "Content-type: text/plain\r\n"
@@ -23,6 +28,11 @@ const char *http_405_content =
     "Content-type: text/plain\r\n"
     "\r\n"
     "Method Not Allowed \r\n";
+
+const char *http_412_content =
+    "HTTP/1.0 412 Precondition Failed\r\n"
+    "Content-type: text/plain\r\n"
+    "\r\n";
 
 const char *http_502_content =
     "HTTP/1.0 502 Bad Gateway\r\n"
@@ -96,11 +106,17 @@ void Server::AddHttpErrorRequest(int client_socket, int status_code) {
    const char *data;
 
    switch (status_code) {
+      case 304:
+         data = http_304_content;
+         break;
       case 400:
          data = http_400_content;
          break;
       case 405:
          data = http_405_content;
+         break;
+      case 412:
+         data = http_412_content;
          break;
       case 502:
          data = http_502_content;
@@ -171,6 +187,7 @@ void Server::HandleWrite(struct Request *request, int response) {
       close(request->client_socket);
    }
    Utils::ReleaseRequest(request);
+   Log(__FILE__, __LINE__) << "Socket closed";
 }
 
 int Server::HandleWriteStream(struct Request *request, int response) {

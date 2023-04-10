@@ -19,10 +19,30 @@ void Stream::SetServer(Server *server) { server_ = server; }
 void Stream::SetRing(struct io_uring *ring) { ring_ = ring; }
 
 bool Stream::HandleExistsResource(struct Request *entry) {
-   struct Request *stream = Utils::StreamRequest(entry);
+   std::cout<< "LAN_[" << __FILE__ << ":" << __LINE__ << "] "<< "aaa" << std::endl;
+   if (resources_.find(entry->resource_id) != resources_.end()) {
+      struct Mux *mux = resources_.at(entry->resource_id);
 
-   if (resources_.find(stream->resource_id) != resources_.end()) {
-      struct Mux *mux = resources_.at(stream->resource_id);
+      std::string header_data((char*)entry->iov[2].iov_base);
+
+      std::string etag = Utils::GetHeaderTag(header_data, "If-Match");
+      if (!etag.empty()) {
+         std::cout<< "LAN_[" << __FILE__ << ":" << __LINE__ << "] "<< etag << std::endl;
+         if (etag != mux->etag) {
+            server_->AddHttpErrorRequest(entry->client_socket, 412);
+            return true;
+         }
+      }
+
+      etag = Utils::GetHeaderTag(header_data, "If-None-Match");
+      if (!etag.empty()) {
+         if (etag == mux->etag) {
+            server_->AddHttpErrorRequest(entry->client_socket, 304);
+            return true;
+         }
+      }
+
+      struct Request *stream = Utils::StreamRequest(entry);
       mux->requests.push_back(stream);
       if (mux->type != RESOURCE_TYPE_UNDEFINED) {
          AddWriteHeaders(stream, mux);
@@ -30,6 +50,7 @@ bool Stream::HandleExistsResource(struct Request *entry) {
       return true;
    }
 
+   struct Request *stream = Utils::StreamRequest(entry);
    struct Mux *mux = CreateMux();
    mux->requests.push_back(stream);
    std::pair<uint64_t, struct Mux *> item(stream->resource_id, mux);
@@ -57,7 +78,7 @@ void Stream::HandleWriteHeaders(struct Request *stream) {
    }
 }
 
-void Stream::SetCacheResource(uint64_t resource_id, struct Request *cache,
+void Stream::SetCacheResource(uint64_t resource_id, const std::string &header_data,
                               std::string path, bool is_completed) {
    struct Mux *mux = resources_.at(resource_id);
    mux->type = RESOURCE_TYPE_CACHE;
@@ -65,9 +86,11 @@ void Stream::SetCacheResource(uint64_t resource_id, struct Request *cache,
    mux->path = path;
    mux->is_completed = is_completed;
 
-   mux->header.iov_len = cache->iov[0].iov_len;
-   mux->header.iov_base = malloc(cache->iov[0].iov_len);
-   memcpy(mux->header.iov_base, cache->iov[0].iov_base, cache->iov[0].iov_len);
+   mux->etag = Utils::GetHeaderTag(header_data, "ETag");
+
+   mux->header.iov_len = header_data.size();
+   mux->header.iov_base = malloc(mux->header.iov_len);
+   memcpy(mux->header.iov_base, header_data.c_str(), mux->header.iov_len);
 
    for (struct Request *const c : mux->requests) {
       if (!c->is_processing) {
@@ -76,13 +99,13 @@ void Stream::SetCacheResource(uint64_t resource_id, struct Request *cache,
    }
 }
 
-void Stream::SetStreamingResource(uint64_t resource_id, struct Request *http) {
+void Stream::SetStreamingResource(uint64_t resource_id, const std::string &header_data) {
    struct Mux *mux = resources_.at(resource_id);
    mux->type = RESOURCE_TYPE_STREAMING;
 
-   mux->header.iov_len = http->iov[0].iov_len;
-   mux->header.iov_base = malloc(http->iov[0].iov_len);
-   memcpy(mux->header.iov_base, http->iov[0].iov_base, http->iov[0].iov_len);
+   mux->header.iov_len = header_data.size();
+   mux->header.iov_base = malloc(mux->header.iov_len);
+   memcpy(mux->header.iov_base, header_data.c_str(), mux->header.iov_len);
 
    for (struct Request *const c : mux->requests) {
       if (!c->is_processing) {

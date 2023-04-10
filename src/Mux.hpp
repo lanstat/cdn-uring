@@ -23,6 +23,7 @@ struct Mux {
    int type;
    bool is_completed;
    std::string path;
+   std::string etag;
    struct iovec *buffer;
 };
 #endif

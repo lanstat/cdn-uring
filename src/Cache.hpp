@@ -37,7 +37,7 @@ class Cache {
   void AddWriteRequest(struct Request *http);
   int HandleWrite(struct Request *cache);
 
-  bool GenerateNode(struct Request *http);
+  bool GenerateNode(struct Request *http, std::string header);
 
  private:
   struct io_uring *ring_;

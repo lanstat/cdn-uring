@@ -21,5 +21,10 @@ class Utils {
    static struct Request *HttpExternalRequest(struct Request *cache);
    static struct Request *HttpsExternalRequest(struct Request *inner);
    static void ReleaseRequest(struct Request *request);
+   static std::string ReplaceHeaderTag(std::string header,
+                                       const std::string &to_search,
+                                       const std::string &replaced);
+   static std::string GetHeaderTag(std::string header,
+                                   const std::string &to_search);
 };
 #endif

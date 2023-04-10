@@ -22,9 +22,9 @@ class Http {
   void SetCache(Cache *cache);
 
   void AddFetchDataRequest(struct Request *req);
-  virtual int HandleReadHeaderRequest(struct Request *http, int readed) = 0;
+  int HandleReadHeaderRequest(struct Request *http, int readed);
+  int HandleReadData(struct Request *request, int readed);
   virtual bool HandleFetchRequest(struct Request *request, bool ipv4) = 0;
-  virtual int HandleReadData(struct Request *request, int response) = 0;
 
  protected:
   int buffer_size_;
@@ -36,7 +36,11 @@ class Http {
   int GetResourceType(char *header, int size);
   int FetchHeaderLength(char *header, int size);
   std::string GetExternalHeader(char * header);
+  virtual int PreRequest(struct Request *http, int readed) = 0;
+  virtual int PostRequest(struct Request *http) = 0;
  private:
   void *zero_;
+
+  std::string ProcessExternalHeader(struct Request *http);
 };
 #endif
