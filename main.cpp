@@ -54,14 +54,22 @@ void ParserArguments(int argc, char** argv) {
             Settings::HLSMode = true;
             continue;
         }
+        if (memcmp(argv[i], "-cache-dir=", 10) == 0) {
+            std::string tmp(argv[i]);
+            Settings::CacheDir = tmp.substr(11);
+            continue;
+        }
     }
 }
 
 int main(int argc, char** argv) {
     ParserArguments(argc, argv);
 
-    std::filesystem::path cwd = std::filesystem::current_path() / "cache/";
-    Settings::CacheDir = cwd.string();
+    if (Settings::CacheDir.empty()) {
+        std::filesystem::path cwd = std::filesystem::current_path() / "cache/";
+        Settings::CacheDir = cwd.string();
+    }
+
     if (!std::filesystem::is_directory(Settings::CacheDir) ||
         !std::filesystem::exists(Settings::CacheDir)) {
         std::filesystem::create_directory(Settings::CacheDir);

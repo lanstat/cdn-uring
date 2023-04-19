@@ -19,7 +19,6 @@ void Stream::SetServer(Server *server) { server_ = server; }
 void Stream::SetRing(struct io_uring *ring) { ring_ = ring; }
 
 bool Stream::HandleExistsResource(struct Request *entry) {
-   std::cout<< "LAN_[" << __FILE__ << ":" << __LINE__ << "] "<< "aaa" << std::endl;
    if (resources_.find(entry->resource_id) != resources_.end()) {
       struct Mux *mux = resources_.at(entry->resource_id);
 
@@ -27,7 +26,6 @@ bool Stream::HandleExistsResource(struct Request *entry) {
 
       std::string etag = Utils::GetHeaderTag(header_data, "If-Match");
       if (!etag.empty()) {
-         std::cout<< "LAN_[" << __FILE__ << ":" << __LINE__ << "] "<< etag << std::endl;
          if (etag != mux->etag) {
             server_->AddHttpErrorRequest(entry->client_socket, 412);
             return true;
