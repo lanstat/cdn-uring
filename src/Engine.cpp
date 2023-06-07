@@ -107,6 +107,10 @@ void Engine::FatalError(const char *syscall) {
  * the web server.
  * */
 void Engine::SetupListeningSocket(int port) {
+   ListenIpv6(port);
+}
+
+void Engine::ListenIpv4(int port) {
    int sock;
    struct sockaddr_in srv_addr;
 
@@ -124,6 +128,39 @@ void Engine::SetupListeningSocket(int port) {
    srv_addr.sin_family = AF_INET;
    srv_addr.sin_port = htons(port);
    srv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+   /* We bind to a port and turn this socket into a listening
+    * socket.
+    * */
+   if (bind(sock, (const struct sockaddr *)&srv_addr, sizeof(srv_addr)) < 0) {
+      FatalError("bind()");
+   }
+
+   if (listen(sock, 10) < 0) {
+      FatalError("listen()");
+   }
+
+   socket_ = sock;
+}
+
+void Engine::ListenIpv6(int port) {
+   int sock;
+   struct sockaddr_in6 srv_addr;
+
+   sock = socket(PF_INET6, SOCK_STREAM, 0);
+   if (sock == -1) {
+      FatalError("socket()");
+   }
+
+   int enable = 1;
+   if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0) {
+      FatalError("setsockopt(SO_REUSEADDR)");
+   }
+
+   memset(&srv_addr, 0, sizeof(srv_addr));
+   srv_addr.sin6_family = AF_INET6;
+   srv_addr.sin6_port = htons(port);
+   srv_addr.sin6_addr = in6addr_any;
 
    /* We bind to a port and turn this socket into a listening
     * socket.

@@ -41,5 +41,8 @@ class Engine {
    int AddAcceptRequest(int server_socket, struct sockaddr_in *client_addr,
                         socklen_t *client_addr_len);
    void FatalError(const char *syscall);
+
+   void ListenIpv4(int port);
+   void ListenIpv6(int port);
 };
 #endif
