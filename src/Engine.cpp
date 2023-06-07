@@ -73,6 +73,7 @@ Engine::Engine() {
    server_ = new Server();
    cache_ = new Cache();
    stream_ = new Stream();
+   buffer_ = new Buffer();
 
    if (Settings::UseSSL) {
       http_ = new HttpsClient();
@@ -81,6 +82,7 @@ Engine::Engine() {
    }
 
    ring_ = (struct io_uring *)malloc(sizeof(struct io_uring));
+
 }
 
 Engine::~Engine() {
@@ -89,6 +91,7 @@ Engine::~Engine() {
    delete cache_;
    delete stream_;
    delete http_;
+   delete buffer_;
 
    free(ring_);
 }
@@ -137,6 +140,8 @@ void Engine::SetupListeningSocket(int port) {
    }
 
    socket_ = sock;
+
+   buffer_->ReserveMemory();
 }
 
 int Engine::AddAcceptRequest(int server_socket, struct sockaddr_in *client_addr,

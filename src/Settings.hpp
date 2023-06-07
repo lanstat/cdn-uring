@@ -14,5 +14,6 @@ class Settings {
    static int CacheBufferSize;
    static int StreamingBufferSize;
    static bool HLSMode;
+   static int ReservedBufferSize;
 };
 #endif

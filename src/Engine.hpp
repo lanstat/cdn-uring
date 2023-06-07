@@ -20,6 +20,7 @@
 #include "Request.hpp"
 #include "Server.hpp"
 #include "Stream.hpp"
+#include "Buffer.hpp"
 
 class Engine {
   public:
@@ -37,6 +38,7 @@ class Engine {
    Http *http_;
    Server *server_;
    Stream *stream_;
+   Buffer *buffer_;
 
    int AddAcceptRequest(int server_socket, struct sockaddr_in *client_addr,
                         socklen_t *client_addr_len);

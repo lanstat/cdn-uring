@@ -50,14 +50,13 @@ Server::Server() { ring_ = nullptr; }
 
 void Server::SetRing(struct io_uring *ring) { ring_ = ring; }
 
+void Server::SetBuffer(Buffer *buffer) { buffer_ = buffer; }
+
 void Server::AddReadRequest(int client_socket) {
    struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
-   struct Request *req = Utils::HttpEntryRequest();
-   req->iov[0].iov_base = malloc(READ_SZ);
-   req->iov[0].iov_len = READ_SZ;
+   struct Request *req = buffer_->HttpEntryRequest();
    req->event_type = EVENT_TYPE_SERVER_READ;
    req->client_socket = client_socket;
-   memset(req->iov[0].iov_base, 0, READ_SZ);
    /* Linux kernel 5.5 has support for readv, but not for recv() or read() */
    io_uring_prep_readv(sqe, client_socket, &req->iov[0], 1, 0);
    io_uring_sqe_set_data(sqe, req);
@@ -143,7 +142,7 @@ int Server::FetchHeader(const char *src, char *command, char *header,
       if (src[offset] == '\r' && src[offset + 1] == '\n' &&
           src[offset + 2] == '\r' && src[offset + 3] == '\n') {
          offset += 2;
-         
+
          break;
       }
       offset++;

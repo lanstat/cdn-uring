@@ -2,7 +2,7 @@
 
 bool Settings::UseSSL = false;
 
-int Settings::HttpBufferSize = 10240;
+int Settings::HttpBufferSize = 2048;
 
 std::string Settings::CacheDir = "";
 
@@ -17,3 +17,5 @@ int Settings::CacheBufferSize = 64;
 int Settings::StreamingBufferSize = 256;
 
 bool Settings::HLSMode = false;
+
+int Settings::ReservedBufferSize = 51200;
