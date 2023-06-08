@@ -8,6 +8,7 @@
 #include "Logger.hpp"
 #include "Request.hpp"
 #include "Utils.hpp"
+#include "Settings.hpp"
 #include "xxhash64.h"
 
 #define READ_SZ 8192
@@ -80,9 +81,14 @@ bool Server::HandleRead(struct Request *entry_request) {
    path = strtok_r(NULL, " ", &saveptr);
 
    if (strcmp(method, "get") == 0) {
-      entry_request->iov[1].iov_base = malloc(strlen(path) + 1);
-      entry_request->iov[1].iov_len = strlen(path) + 1;
-      strcpy((char *)entry_request->iov[1].iov_base, path);
+      std::string tmp(path);
+      if (!Settings::Proxy.empty()) {
+         tmp = Settings::Proxy + tmp;
+         std::cout<< "LAN_[" << __FILE__ << ":" << __LINE__ << "] "<< tmp << std::endl;
+      }
+      entry_request->iov[1].iov_base = malloc(tmp.size());
+      entry_request->iov[1].iov_len = tmp.size();
+      strcpy((char *)entry_request->iov[1].iov_base, tmp.c_str());
 
       entry_request->iov[2].iov_base = malloc(strlen(header) + 1);
       entry_request->iov[2].iov_len = strlen(header) + 1;

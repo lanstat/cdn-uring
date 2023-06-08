@@ -90,7 +90,10 @@ wget http://localhost/upload.wikimedia.org/wikipedia/commons/3/35/Tux.svg
 - __-server-port=###__ Define the listener port, default 8000
 - __-dns-port=###__ Define the dns listener port, default 50053
 - __-buffer-size=###__ Buffer I/O size
-- __-no-cache__ Diable the cache storage
+- __-no-cache__ Disable the cache storage
+- __-ipv6__ Listen ipv6
+- __-proxy=###__ Proxy to mask the request, ex -proxy=google.com
+- __-host-file=###__ File with static host
 
 ## TODO
 - Add perfomance test

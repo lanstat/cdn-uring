@@ -17,3 +17,9 @@ int Settings::CacheBufferSize = 64;
 int Settings::StreamingBufferSize = 256;
 
 bool Settings::HLSMode = false;
+
+bool Settings::IPv6Mode = false;
+
+std::string Settings::Proxy = "";
+
+std::string Settings::HostFile = "";

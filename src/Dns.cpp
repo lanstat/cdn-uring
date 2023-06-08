@@ -4,9 +4,12 @@
 #include <string.h>
 #include <time.h>
 
+#include <fstream>
+
 #include "EventType.hpp"
 #include "Logger.hpp"
 #include "Request.hpp"
+#include "Settings.hpp"
 
 #define VERIFY_TIMEOUT 50000000  // 50 ms
 
@@ -21,9 +24,13 @@ Dns::Dns() {
        "2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|"
        ":((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]"
        "{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-"
-       "9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:)"
-       "{1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]"
+       "9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:"
+       ")"
+       "{1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-"
+       "4]"
        "|1{0,1}[0-9]){0,1}[0-9]))%5D(:\\d+)*$");
+
+   LoadHostFile();
 }
 
 Dns::~Dns() {}
@@ -67,6 +74,36 @@ void Dns::AddFetchAAAARequest(struct Request *request, bool isHttps) {
       port = 443;
    }
 
+   if (hosts_ipv4_.find(host) != hosts_ipv4_.end()) {
+      auto ip = hosts_ipv4_.at(host);
+      struct sockaddr_in socket;
+      socket.sin_port = htons(port);
+      socket.sin_family = AF_INET;
+
+      if (inet_pton(AF_INET, ip.c_str(), &socket.sin_addr) <= 0) {
+         dnsError((void *)request);
+         return;
+      }
+
+      dnsRight((void *)request, socket);
+      return;
+   }
+
+   if (hosts_ipv6_.find(host) != hosts_ipv6_.end()) {
+      auto ip = hosts_ipv6_.at(host);
+      struct sockaddr_in6 socket;
+      socket.sin6_port = htons(port);
+      socket.sin6_family = AF_INET6;
+
+      if (inet_pton(AF_INET6, ip.c_str(), &socket.sin6_addr) <= 0) {
+         dnsError((void *)request);
+         return;
+      }
+
+      dnsRight((void *)request, socket);
+      return;
+   }
+
    if (std::regex_match(host, ipv4_regex_)) {
       pos = host.find(":");
       if (pos != std::string::npos) {
@@ -85,6 +122,7 @@ void Dns::AddFetchAAAARequest(struct Request *request, bool isHttps) {
       dnsRight((void *)request, socket);
       return;
    }
+
    if (std::regex_match(host, ipv6_regex_)) {
       pos = host.find("%5D");
       std::string tmp = host.substr(pos);
@@ -93,11 +131,11 @@ void Dns::AddFetchAAAARequest(struct Request *request, bool isHttps) {
       if (pos != std::string::npos) {
          port = std::stoi(tmp.substr(pos + 1));
       }
-      struct sockaddr_in socket;
-      socket.sin_port = htons(port);
-      socket.sin_family = AF_INET6;
+      struct sockaddr_in6 socket;
+      socket.sin6_port = htons(port);
+      socket.sin6_family = AF_INET6;
 
-      if (inet_pton(AF_INET6, host.c_str(), &socket.sin_addr) <= 0) {
+      if (inet_pton(AF_INET6, host.c_str(), &socket.sin6_addr) <= 0) {
          dnsError((void *)request);
          return;
       }
@@ -162,3 +200,35 @@ void Dns::dnsError(void *request) {
 }
 
 void Dns::dnsWrong() { Log(__FILE__, __LINE__, Log::kError) << "dns wrong"; }
+
+void Dns::LoadHostFile() {
+   if (Settings::HostFile.empty()) {
+      return;
+   }
+   std::ifstream file;
+   file.open(Settings::HostFile);
+   if (!file.is_open()) {
+      Log(__FILE__, __LINE__, Log::kError) << "Error opening file";
+      return;
+   }
+   std::string line;
+   while (std::getline(file, line)) {
+      std::size_t pos = line.find(" ");
+      if (pos != std::string::npos) {
+         std::string domain = line.substr(pos + 1);
+         std::string ip = line.substr(0, pos);
+
+         if (std::regex_match(ip, ipv4_regex_)) {
+            std::pair<std::string, std::string> item(domain, ip);
+            hosts_ipv4_.insert(item);
+            continue;
+         }
+         if (std::regex_match(ip, ipv6_regex_)) {
+            std::pair<std::string, std::string> item(domain, ip);
+            hosts_ipv6_.insert(item);
+            continue;
+         }
+      }
+   }
+   file.close();
+}

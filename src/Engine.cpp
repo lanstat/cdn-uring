@@ -107,7 +107,11 @@ void Engine::FatalError(const char *syscall) {
  * the web server.
  * */
 void Engine::SetupListeningSocket(int port) {
-   ListenIpv6(port);
+   if (Settings::IPv6Mode) {
+      ListenIpv6(port);
+   } else {
+      ListenIpv4(port);
+   }
 }
 
 void Engine::ListenIpv4(int port) {

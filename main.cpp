@@ -54,9 +54,26 @@ void ParserArguments(int argc, char** argv) {
             Settings::HLSMode = true;
             continue;
         }
-        if (memcmp(argv[i], "-cache-dir=", 10) == 0) {
+        if (memcmp(argv[i], "-cache-dir=", 11) == 0) {
             std::string tmp(argv[i]);
             Settings::CacheDir = tmp.substr(11);
+            continue;
+        }
+        if (strcmp(argv[i], "-ipv6") == 0) {
+            Settings::IPv6Mode = true;
+            continue;
+        }
+        if (memcmp(argv[i], "-proxy=", 7) == 0) {
+            std::string tmp(argv[i]);
+            Settings::Proxy = tmp.substr(7);
+            if (Settings::Proxy.front() != '/') {
+                Settings::Proxy = "/" + Settings::Proxy;
+            }
+            continue;
+        }
+        if (memcmp(argv[i], "-host-file=", 11) == 0) {
+            std::string tmp(argv[i]);
+            Settings::HostFile = tmp.substr(11);
             continue;
         }
     }

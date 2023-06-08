@@ -14,5 +14,8 @@ class Settings {
    static int CacheBufferSize;
    static int StreamingBufferSize;
    static bool HLSMode;
+   static bool IPv6Mode;
+   static std::string Proxy;
+   static std::string HostFile;
 };
 #endif
