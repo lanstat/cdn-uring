@@ -95,7 +95,7 @@ void Dns::AddFetchAAAARequest(struct Request *request, bool isHttps) {
       socket.sin6_port = htons(port);
       socket.sin6_family = AF_INET6;
 
-      if (inet_pton(AF_INET6, ip.c_str(), &socket.sin6_addr) <= 0) {
+      if (inet_pton(AF_INET6, host.c_str(), &socket.sin6_addr) <= 0) {
          dnsError((void *)request);
          return;
       }

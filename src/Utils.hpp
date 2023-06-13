@@ -26,5 +26,6 @@ class Utils {
                                        const std::string &replaced);
    static std::string GetHeaderTag(std::string header,
                                    const std::string &to_search);
+   static int EndsWith(const char *str, const char *suffix);
 };
 #endif

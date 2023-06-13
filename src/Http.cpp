@@ -49,6 +49,10 @@ void Http::SetStream(Stream *stream) { stream_ = stream; }
 void Http::AddFetchDataRequest(struct Request *req) {}
 
 int Http::GetResourceType(char *header, int size) {
+   auto connection = Utils::GetHeaderTag(header, "Connection");
+   if (connection == "close") {
+      return RESOURCE_TYPE_CACHE;
+   }
    return Settings::HLSMode ? RESOURCE_TYPE_STREAMING : RESOURCE_TYPE_CACHE;
 }
 
@@ -68,7 +72,9 @@ int Http::FetchHeaderLength(char *header, int size) {
 std::string Http::GetExternalHeader(char *header) {
    std::string tmp(header);
 
-   tmp = Utils::ReplaceHeaderTag(tmp, "Connection", "close");
+   if (!Settings::AstraMode) {
+      tmp = Utils::ReplaceHeaderTag(tmp, "Connection", "close");
+   }
    return tmp + "\r\n";
 }
 
@@ -78,8 +84,8 @@ std::string Http::ProcessExternalHeader(struct Request *http) {
    std::string tmp((char *)header);
    free(header);
 
-   tmp = Utils::ReplaceHeaderTag(tmp, "Server", "cdn/0.1.0");
-   tmp = Utils::ReplaceHeaderTag(tmp, "ETag", GetEtag(http->resource_id));
+   // tmp = Utils::ReplaceHeaderTag(tmp, "Server", "cdn/0.1.0");
+   // tmp = Utils::ReplaceHeaderTag(tmp, "ETag", GetEtag(http->resource_id));
 
    return tmp;
 }
@@ -113,6 +119,11 @@ int Http::HandleReadHeaderRequest(struct Request *http, int readed) {
    } else if (type == RESOURCE_TYPE_STREAMING) {
       http->iov[0].iov_len = readed;
       stream_->SetStreamingResource(http->resource_id, new_header);
+      if (header_length < readed) {
+         stream_->NotifyStream(http->resource_id,
+                               http->iov[0].iov_base + header_length,
+                               readed - header_length);
+      }
    }
    http->pivot = type;
    http->event_type = EVENT_TYPE_HTTP_READ_CONTENT;

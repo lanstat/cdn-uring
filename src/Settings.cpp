@@ -18,6 +18,8 @@ int Settings::StreamingBufferSize = 256;
 
 bool Settings::HLSMode = false;
 
+bool Settings::AstraMode = false;
+
 bool Settings::IPv6Mode = false;
 
 std::string Settings::Proxy = "";

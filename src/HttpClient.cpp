@@ -21,12 +21,13 @@ bool HttpClient::HandleFetchRequest(struct Request *inner, bool ipv4) {
    std::string host = url.substr(0, pos);
    std::string query = url.substr(pos);
 
-   Log(__FILE__, __LINE__) << query;
+   Log(__FILE__, __LINE__) << "Requesting: " << query;
    int sock = -1;
    int is_connected = -1;
 
    if (ipv4) {
       struct sockaddr_in *client = (struct sockaddr_in *)inner->iov[4].iov_base;
+
       sock = socket(AF_INET, SOCK_STREAM, 0);
       if (sock > 0) {
          is_connected = connect(sock, (struct sockaddr *)client,
@@ -78,6 +79,16 @@ bool HttpClient::HandleFetchRequest(struct Request *inner, bool ipv4) {
    http->iov[0].iov_base = malloc(buffer_size_);
    http->iov[0].iov_len = buffer_size_;
    memset(http->iov[0].iov_base, 0, buffer_size_);
+
+   http->iov[1].iov_len = inner->iov[2].iov_len;
+   http->iov[1].iov_base = malloc(http->iov[1].iov_len);
+   memcpy(http->iov[1].iov_base, inner->iov[2].iov_base,
+          http->iov[1].iov_len);
+
+   http->iov[2].iov_len = inner->iov[4].iov_len;
+   http->iov[2].iov_base = malloc(http->iov[2].iov_len);
+   memcpy(http->iov[2].iov_base, inner->iov[4].iov_base,
+          http->iov[2].iov_len);
 
    // io_uring_prep_readv(sqe, sock, &http->iov[0], 1, 0);
    io_uring_prep_read(sqe, http->client_socket, http->iov[0].iov_base,

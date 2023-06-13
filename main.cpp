@@ -54,6 +54,10 @@ void ParserArguments(int argc, char** argv) {
             Settings::HLSMode = true;
             continue;
         }
+        if (strcmp(argv[i], "-astra") == 0) {
+            Settings::AstraMode = true;
+            continue;
+        }
         if (memcmp(argv[i], "-cache-dir=", 11) == 0) {
             std::string tmp(argv[i]);
             Settings::CacheDir = tmp.substr(11);

@@ -84,7 +84,6 @@ bool Server::HandleRead(struct Request *entry_request) {
       std::string tmp(path);
       if (!Settings::Proxy.empty()) {
          tmp = Settings::Proxy + tmp;
-         std::cout<< "LAN_[" << __FILE__ << ":" << __LINE__ << "] "<< tmp << std::endl;
       }
       entry_request->iov[1].iov_base = malloc(tmp.size());
       entry_request->iov[1].iov_len = tmp.size();

@@ -2,6 +2,7 @@
 
 #include "EventType.hpp"
 #include "HttpClient.hpp"
+#include "AstraHttpClient.hpp"
 #include "HttpsClient.hpp"
 #include "Logger.hpp"
 #include "Settings.hpp"
@@ -59,7 +60,7 @@ void PrintRequestType(int type) {
          type_str = "EVENT_TYPE_CACHE_WRITE_HEADER";
          break;
       case EVENT_TYPE_CACHE_WRITE_CONTENT:
-         type_str = "EVENT_TYPE_DNS_FETCHAAAA";
+         type_str = "EVENT_TYPE_CACHE_WRITE_CONTENT";
          break;
       case EVENT_TYPE_CACHE_CLOSE:
          type_str = "EVENT_TYPE_CACHE_CLOSE";
@@ -74,10 +75,14 @@ Engine::Engine() {
    cache_ = new Cache();
    stream_ = new Stream();
 
-   if (Settings::UseSSL) {
-      http_ = new HttpsClient();
+   if (Settings::AstraMode) {
+      http_ = new AstraHttpClient();
    } else {
-      http_ = new HttpClient();
+      if (Settings::UseSSL) {
+         http_ = new HttpsClient();
+      } else {
+         http_ = new HttpClient();
+      }
    }
 
    ring_ = (struct io_uring *)malloc(sizeof(struct io_uring));
@@ -294,6 +299,9 @@ void Engine::Run() {
             dns_->HandleVerifyUDP();
             dns_->AddVerifyUDPRequest();
             Utils::ReleaseRequest(request);
+            break;
+         case EVENT_TYPE_DNS_FETCHAAAA:
+            dns_->AddFetchAAAARequest(request, Settings::UseSSL);
             break;
          case EVENT_TYPE_HTTP_FETCH:
             http_->HandleFetchRequest(request, false);

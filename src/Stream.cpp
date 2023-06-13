@@ -73,6 +73,8 @@ void Stream::HandleWriteHeaders(struct Request *stream) {
 
    if (mux->type == RESOURCE_TYPE_CACHE) {
       AddWriteFromCacheRequest(stream, mux);
+   } else if (mux->type == RESOURCE_TYPE_STREAMING) {
+      AddWriteStreamRequest(stream);
    }
 }
 
@@ -174,7 +176,7 @@ int Stream::AddWriteStreamRequest(struct Request *stream) {
    stream->pivot = buffer_pivot;
    stream->pivot %= Settings::StreamingBufferSize;
 
-   server_->AddWriteRequest(stream, true);
+   server_->AddWriteRequest(stream, EVENT_TYPE_SERVER_WRITE_PARTIAL);
 
    return 0;
 }

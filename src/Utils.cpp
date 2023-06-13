@@ -58,9 +58,11 @@ struct Request *Utils::HttpErrorRequest() { return CreateRequest(1); }
  * Object for http external request
  *
  * 0 = void* bytes bytes readed for the request
+ * 1 = char* path requested by the client eg. google.com/images
+ * 2 = char* client header
  */
 struct Request *Utils::HttpExternalRequest(struct Request *cache) {
-   struct Request *request = CreateRequest(1);
+   struct Request *request = CreateRequest(3);
    request->resource_id = cache->resource_id;
 
    return request;
@@ -72,9 +74,11 @@ struct Request *Utils::HttpExternalRequest(struct Request *cache) {
  * 0 = void* bytes bytes readed for the request
  * 1 = SSL* ssl pointer
  * 2 = SSL_CTX* ssl context
+ * 3 = char* path requested by the client eg. google.com/images
+ * 4 = char* client header
  */
 struct Request *Utils::HttpsExternalRequest(struct Request *inner) {
-   struct Request *request = CreateRequest(3);
+   struct Request *request = CreateRequest(5);
    request->resource_id = inner->resource_id;
 
    return request;
@@ -184,4 +188,17 @@ std::string Utils::GetHeaderTag(std::string header,
       std::string second = header.substr(pos + 4 + to_search.size());
       return second.substr(0, second.find("\r\n"));
    }
+}
+
+int Utils::EndsWith(const char *str, const char *suffix) {
+   if (str == NULL || suffix == NULL) {
+      return 0;
+   }
+
+   size_t str_len = strlen(str);
+   size_t suffix_len = strlen(suffix);
+
+   if (suffix_len > str_len) return 0;
+
+   return 0 == strncmp(str + str_len - suffix_len, suffix, suffix_len);
 }
