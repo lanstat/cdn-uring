@@ -21,7 +21,7 @@ bool HttpClient::HandleFetchRequest(struct Request *inner, bool ipv4) {
    std::string host = url.substr(0, pos);
    std::string query = url.substr(pos);
 
-   Log(__FILE__, __LINE__) << "Requesting: " << query;
+   Log(__FILE__, __LINE__, Log::kDebug) << "Requesting: " << query;
    int sock = -1;
    int is_connected = -1;
 

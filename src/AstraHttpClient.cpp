@@ -14,7 +14,7 @@
 #define HTTP_TYPE_CONTENT 2
 #define HTTP_TYPE_TS 3
 
-#define TS_TIMEOUT 1800
+#define TS_TIMEOUT 1250
 
 AstraHttpClient::AstraHttpClient() {}
 
@@ -37,6 +37,7 @@ int AstraHttpClient::HandleReadHeaderRequest(struct Request *http, int readed) {
 
    char *url = (char *)http->iov[1].iov_base;
    if (Utils::EndsWith(url, "/index.m3u8")) {
+      std::cout<< "LAN_[" << __FILE__ << ":" << __LINE__ << "] "<< url << std::endl;
       http->pivot = HTTP_TYPE_INDEX;
       if (playlist_.find(http->resource_id) == playlist_.end()) {
          CreatePlaylist(http);
@@ -133,7 +134,7 @@ bool AstraHttpClient::PlayNextTrack(struct Request *http, bool is_first) {
       playlist_.at(http->resource_id)
           ->tracks.erase(playlist_.at(http->resource_id)->tracks.begin());
       if (is_first) {
-         RequestTrack(http, url, 0);
+         RequestTrack(http, url);
       } else {
          RequestTrack(http, url, TS_TIMEOUT);
       }
@@ -149,13 +150,18 @@ bool AstraHttpClient::ProcessPlaylist(struct Request *http) {
    std::string line;
    while (std::getline(stream, line)) {
       if (line.rfind("#EXT-X-STREAM-INF:", 0) == 0) {
+         std::cout<< "LAN_[" << __FILE__ << ":" << __LINE__ << "] "<< line << std::endl;
          std::string url;
          std::getline(stream, url);
          if (url.rfind("http", 0) == 0) {
             url = url.replace(url.begin(), url.begin() + 7, "/");
             Log(__FILE__, __LINE__, Log::kDebug) << "Found playlist: " << url;
-            playlist_.at(http->resource_id)->url = url;
-            RequestTrack(http, url, TS_TIMEOUT);
+            if (playlist_.at(http->resource_id)->url.empty()) {
+               playlist_.at(http->resource_id)->url = url;
+               RequestTrack(http, url);
+            } else {
+               RequestTrack(http, url, TS_TIMEOUT);
+            }
             return true;
          }
       }
@@ -214,10 +220,8 @@ void AstraHttpClient::ReleasePlaylist(struct Request *http) {
 void AstraHttpClient::CreatePlaylist(struct Request *http) {
    struct Playlist *playlist = new Playlist();
    std::vector<std::string> tracks;
-   std::string url((char *)http->iov[1].iov_base);
 
    playlist->tracks = tracks;
-   playlist->url = url;
    std::pair<uint64_t, struct Playlist *> item(http->resource_id, playlist);
    playlist_.insert(item);
 }

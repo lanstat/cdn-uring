@@ -29,7 +29,7 @@ class AstraHttpClient : public HttpClient {
    bool VerifyContent(struct Request *http);
    bool ProcessReproduction(struct Request *http);
    void ReleaseSocket(struct Request *http) override;
-   void RequestTrack(struct Request *http, std::string url, int msecs);
+   void RequestTrack(struct Request *http, std::string url, int msecs=0);
    bool PlayNextTrack(struct Request *http, bool is_first=false);
    void ReleasePlaylist(struct Request *http);
    void CreatePlaylist(struct Request *http);
