@@ -39,6 +39,7 @@ class Http {
    virtual int PreRequest(struct Request *http, int readed) = 0;
    virtual int PostRequest(struct Request *http) = 0;
    std::string ProcessExternalHeader(struct Request *http);
+   int GetStatusCode(std::string header);
 
   private:
    void *zero_;

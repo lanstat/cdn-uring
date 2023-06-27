@@ -84,7 +84,7 @@ std::string Http::ProcessExternalHeader(struct Request *http) {
    std::string tmp((char *)header);
    free(header);
 
-   // tmp = Utils::ReplaceHeaderTag(tmp, "Server", "cdn/0.1.0");
+   //tmp = Utils::ReplaceHeaderTag(tmp, "Server", "cdn/0.1.0");
    // tmp = Utils::ReplaceHeaderTag(tmp, "ETag", GetEtag(http->resource_id));
 
    return tmp;
@@ -167,4 +167,9 @@ int Http::HandleReadData(struct Request *http, int readed) {
    PostRequest(http);
 
    return 0;
+}
+
+int Http::GetStatusCode(std::string header) {
+   std::string status_code = header.substr(9, 3);
+   return std::stoi(status_code);
 }

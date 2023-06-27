@@ -3,6 +3,7 @@
 
 #include <liburing.h>
 
+#include <chrono>
 #include <iostream>
 #include <string>
 #include <unordered_map>
@@ -13,25 +14,30 @@
 #include "Server.hpp"
 
 class AstraHttpClient : public HttpClient {
-  public:
-   AstraHttpClient();
-   int HandleReadHeaderRequest(struct Request *http, int readed) override;
-   int HandleReadData(struct Request *request, int readed) override;
+ public:
+  AstraHttpClient();
+  int HandleReadHeaderRequest(struct Request *http, int readed) override;
+  int HandleReadData(struct Request *request, int readed) override;
 
-  private:
-   struct Playlist {
-     std::string url;
-     std::vector<std::string> tracks;
-   };
-   std::unordered_map<uint64_t, struct Playlist *> playlist_;
+ private:
+  struct Playlist {
+    std::string url;
+    std::vector<std::string> tracks;
+    std::vector<int> tracks_duration;
+    std::chrono::time_point<std::chrono::system_clock> start_time;
+  };
+  std::unordered_map<uint64_t, struct Playlist *> playlist_;
 
-   bool ProcessPlaylist(struct Request *http);
-   bool VerifyContent(struct Request *http);
-   bool ProcessReproduction(struct Request *http);
-   void ReleaseSocket(struct Request *http) override;
-   void RequestTrack(struct Request *http, std::string url, int msecs=0);
-   bool PlayNextTrack(struct Request *http, bool is_first=false);
-   void ReleasePlaylist(struct Request *http);
-   void CreatePlaylist(struct Request *http);
+  bool ProcessPlaylist(struct Request *http);
+  bool VerifyContent(struct Request *http);
+  bool ProcessReproduction(struct Request *http);
+  void ReleaseSocket(struct Request *http) override;
+  void RequestTrack(struct Request *http, std::string url, int msecs = 0);
+  bool PlayNextTrack(struct Request *http, bool is_first = false);
+  void ReleasePlaylist(struct Request *http);
+  void CreatePlaylist(struct Request *http);
+  int GetTimeout(struct Request *http);
+
+  bool ExistsPlaylist(struct Request *http);
 };
 #endif

@@ -4,6 +4,7 @@
 #include <liburing.h>
 
 #include <cstring>
+#include <iostream>
 
 #include "EventType.hpp"
 #include "Logger.hpp"
@@ -11,6 +12,8 @@
 #include "Settings.hpp"
 #include "Utils.hpp"
 #include "xxhash64.h"
+
+#define BUFFER_SIZE 327680
 
 Stream::Stream() { server_ = nullptr; }
 
@@ -22,7 +25,7 @@ bool Stream::HandleExistsResource(struct Request *entry) {
    if (resources_.find(entry->resource_id) != resources_.end()) {
       struct Mux *mux = resources_.at(entry->resource_id);
 
-      std::string header_data((char*)entry->iov[2].iov_base);
+      std::string header_data((char *)entry->iov[2].iov_base);
 
       std::string etag = Utils::GetHeaderTag(header_data, "If-Match");
       if (!etag.empty()) {
@@ -78,8 +81,9 @@ void Stream::HandleWriteHeaders(struct Request *stream) {
    }
 }
 
-void Stream::SetCacheResource(uint64_t resource_id, const std::string &header_data,
-                              std::string path, bool is_completed) {
+void Stream::SetCacheResource(uint64_t resource_id,
+                              const std::string &header_data, std::string path,
+                              bool is_completed) {
    struct Mux *mux = resources_.at(resource_id);
    mux->type = RESOURCE_TYPE_CACHE;
 
@@ -99,7 +103,8 @@ void Stream::SetCacheResource(uint64_t resource_id, const std::string &header_da
    }
 }
 
-void Stream::SetStreamingResource(uint64_t resource_id, const std::string &header_data) {
+void Stream::SetStreamingResource(uint64_t resource_id,
+                                  const std::string &header_data) {
    struct Mux *mux = resources_.at(resource_id);
    mux->type = RESOURCE_TYPE_STREAMING;
 
@@ -160,9 +165,15 @@ int Stream::AddWriteStreamRequest(struct Request *stream) {
 
    struct Mux *mux = resources_.at(stream->resource_id);
 
-   size_t size = mux->buffer[stream->pivot].iov_len;
+   if (stream->auxiliar > 0) {
+      size_t size = mux->buffer[mux->pivot - 1].iov_len;
+      stream->auxiliar -= size;
+      return 1;
+   }
 
+   size_t size = mux->buffer[stream->pivot].iov_len;
    if (size == EMPTY_BUFFER || size == 0) {
+      stream->auxiliar = BUFFER_SIZE;
       return 1;
    }
 
@@ -269,6 +280,10 @@ void Stream::CloseStream(uint64_t resource_id) {
 
 struct Mux *Stream::GetResource(uint64_t resource_id) {
    return resources_.at(resource_id);
+}
+
+bool Stream::ExistsResource(uint64_t resource_id) {
+   return resources_.find(resource_id) != resources_.end();
 }
 
 int Stream::NotifyCache(uint64_t resource_id, bool is_completed) {

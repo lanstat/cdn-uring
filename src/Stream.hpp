@@ -37,6 +37,7 @@ class Stream {
    void ReleaseErrorAllWaitingRequest(uint64_t resource_id, int status_code);
 
    struct Mux *GetResource(uint64_t resource_id);
+   bool ExistsResource(uint64_t resource_id);
 
   private:
    struct io_uring *ring_;

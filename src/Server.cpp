@@ -85,9 +85,11 @@ bool Server::HandleRead(struct Request *entry_request) {
       if (!Settings::Proxy.empty()) {
          tmp = Settings::Proxy + tmp;
       }
-      entry_request->iov[1].iov_base = malloc(tmp.size());
-      entry_request->iov[1].iov_len = tmp.size();
-      strcpy((char *)entry_request->iov[1].iov_base, tmp.c_str());
+      int size = tmp.size() + 1;
+      entry_request->iov[1].iov_base = malloc(size);
+      entry_request->iov[1].iov_len = size;
+      memset(entry_request->iov[1].iov_base, 0, size);
+      memcpy(entry_request->iov[1].iov_base, tmp.c_str(), size);
 
       entry_request->iov[2].iov_base = malloc(strlen(header) + 1);
       entry_request->iov[2].iov_len = strlen(header) + 1;
