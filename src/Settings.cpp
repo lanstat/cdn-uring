@@ -24,4 +24,6 @@ bool Settings::IPv6Mode = false;
 
 std::string Settings::Proxy = "";
 
+std::string Settings::BaseUrl = "";
+
 std::string Settings::HostFile = "";

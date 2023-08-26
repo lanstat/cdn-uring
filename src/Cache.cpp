@@ -11,6 +11,7 @@
 #include "Settings.hpp"
 #include "Utils.hpp"
 #include "xxhash64.h"
+#include "Helpers.hpp"
 
 #define INVALID_FILE 13816973012072644543ULL
 
@@ -97,7 +98,7 @@ void Cache::AddReadHeaderRequest(struct Request *inner) {
 
 int Cache::HandleReadHeader(struct Request *cache, int readed) {
    std::string path = GetCachePath(cache->resource_id);
-   std::string header_data((char*)cache->iov[0].iov_base);
+   std::string header_data((char *)cache->iov[0].iov_base);
    stream_->SetCacheResource(cache->resource_id, header_data, path, true);
 
    close(cache->client_socket);
@@ -151,7 +152,9 @@ bool Cache::AddWriteHeaderRequest(struct Request *header, std::string path) {
 }
 
 bool Cache::HandleWriteHeader(struct Request *cache, int writed) {
-   close(cache->client_socket);
+   if (cache->client_socket) {
+      close(cache->client_socket);
+   }
    Utils::ReleaseRequest(cache);
    return true;
 }
@@ -183,6 +186,13 @@ int Cache::HandleWrite(struct Request *cache) {
    cache->pivot++;
    cache->pivot %= Settings::CacheBufferSize;
 
+   node->size += size;
+
+   auto mux = stream_->GetResource(cache->resource_id);
+   if (mux->in_memory) {
+      return 0;
+   }
+
    cache->is_processing = true;
    struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
    cache->event_type = EVENT_TYPE_CACHE_WRITE_CONTENT;
@@ -192,31 +202,38 @@ int Cache::HandleWrite(struct Request *cache) {
    io_uring_sqe_set_data(sqe, cache);
    io_uring_submit(ring_);
 
-   node->size += size;
-
    return 0;
 }
 
 bool Cache::GenerateNode(struct Request *http, std::string header_buffer) {
-   std::string path = GetCachePath(http->resource_id);
-   int fd = open(path.c_str(), O_CREAT | O_WRONLY | O_TRUNC,
-                 S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-   if (fd < 0) {
-      Log(__FILE__, __LINE__, Log::kError)
-          << "wrong write file " << path << " " << strerror(errno);
-      return false;
-   }
-
+   std::string path;
+   auto mux = stream_->GetResource(http->resource_id);
    auto cache = Utils::CacheRequest(http);
-   cache->client_socket = fd;
+
+   if (!mux->in_memory) {
+      path = GetCachePath(http->resource_id);
+      int fd = open(path.c_str(), O_CREAT | O_WRONLY | O_TRUNC,
+                    S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+      if (fd < 0) {
+         Utils::ReleaseRequest(cache);
+         Log(__FILE__, __LINE__, Log::kError)
+             << "wrong write file " << path << " " << strerror(errno);
+         return false;
+      }
+      cache->client_socket = fd;
+   }
 
    auto header = Utils::CacheRequest(http);
    header->iov[0].iov_len = header_buffer.size();
 
-   memcpy(header->iov[0].iov_base, header_buffer.c_str(), header->iov[0].iov_len);
+   memcpy(header->iov[0].iov_base, header_buffer.c_str(),
+          header->iov[0].iov_len);
 
    stream_->SetCacheResource(http->resource_id, header_buffer, path, false);
-   AddWriteHeaderRequest(header, path);
+
+   if (!mux->in_memory) {
+      AddWriteHeaderRequest(header, path);
+   }
 
    struct Node *node = CreateNode();
    node->cache = cache;
@@ -233,25 +250,42 @@ void Cache::CloseBuffer(uint64_t resource_id) {
    }
 
    node->buffer[node->pivot].iov_len = END_BUFFER;
+
+   auto mux = stream_->GetResource(resource_id);
+   if (mux->in_memory) {
+      node->cache->event_type = EVENT_TYPE_CACHE_WRITE_CONTENT;
+      Helpers::SendRequestNop(ring_, node->cache, 100);
+   }
 }
 
 void Cache::ReleaseBuffer(uint64_t resource_id) {
    struct Node *node = nodes_.at(resource_id);
 
    int size = Settings::CacheBufferSize;
+   int length = 0;
+   for (int i = 0; i < size; i++) {
+      if (node->buffer[i].iov_len == EMPTY_BUFFER ||
+          node->buffer[i].iov_len == END_BUFFER) {
+         length = i;
+         break;
+      }
+   }
+
+   stream_->NotifyCacheCompleted(resource_id, node->buffer, length);
+
    for (int i = 0; i < size; i++) {
       if (node->buffer[i].iov_len > 0) {
          free(node->buffer[i].iov_base);
       }
    }
 
-   close(node->cache->client_socket);
+   if (node->cache->client_socket > 0) {
+      close(node->cache->client_socket);
+   }
 
    delete[] node->buffer;
    delete node;
    nodes_.erase(resource_id);
-
-   stream_->NotifyCache(resource_id, true);
 }
 
 struct Node *Cache::CreateNode() {

@@ -46,7 +46,7 @@ void Log::PrintHeader() {
    std::cout << currentDateTime();
    switch (mode_) {
       case kDebug:
-         std::cout << " \033[1;34mDEBUG\033[0m   " << file_ << ":" << line_ << " ";
+         std::cout << " \033[1;34mDEBUG\033[0m   " ;
          break;
       case kInfo:
          std::cout << " \033[1;36mINFO\033[0m    ";
@@ -57,6 +57,9 @@ void Log::PrintHeader() {
       case kWarning:
          std::cout << " \033[1;33mWARNING\033[0m ";
          break;
+   }
+   if (PrintDebug) {
+      std::cout << file_ << ":" << line_ << " ";
    }
 }
 

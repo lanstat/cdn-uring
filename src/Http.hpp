@@ -40,6 +40,7 @@ class Http {
    virtual int PostRequest(struct Request *http) = 0;
    std::string ProcessExternalHeader(struct Request *http);
    int GetStatusCode(std::string header);
+   void Retry(struct Request *request, bool ipv4);
 
   private:
    void *zero_;

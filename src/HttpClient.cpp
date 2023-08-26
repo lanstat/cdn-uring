@@ -47,14 +47,19 @@ bool HttpClient::HandleFetchRequest(struct Request *inner, bool ipv4) {
       Log(__FILE__, __LINE__, Log::kError) << "Error creating socket";
 
       stream_->ReleaseErrorAllWaitingRequest(inner->resource_id, 502);
-      return false;
+      return true;
    }
 
    if (is_connected < 0) {
       close(sock);
-      Log(__FILE__, __LINE__, Log::kError) << "Could not connect ";
-      stream_->ReleaseErrorAllWaitingRequest(inner->resource_id, 502);
-      return false;
+      if (errno == EAGAIN) {
+         Retry(inner, ipv4);
+         return false;
+      } else {
+         Log(__FILE__, __LINE__, Log::kError) << "Could not connect " << strerror(errno);
+         stream_->ReleaseErrorAllWaitingRequest(inner->resource_id, 502);
+      }
+      return true;
    }
 
    std::stringstream ss;
@@ -67,7 +72,7 @@ bool HttpClient::HandleFetchRequest(struct Request *inner, bool ipv4) {
        (int)request_data.length()) {
       Log(__FILE__, __LINE__, Log::kError) << "invalid socket";
       stream_->ReleaseErrorAllWaitingRequest(inner->resource_id, 502);
-      return false;
+      return true;
    }
 
    struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);

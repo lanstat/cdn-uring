@@ -3,6 +3,7 @@
 #include "EventType.hpp"
 #include "HttpClient.hpp"
 #include "AstraHttpClient.hpp"
+#include "HLSStream.hpp"
 #include "HttpsClient.hpp"
 #include "Logger.hpp"
 #include "Settings.hpp"
@@ -71,9 +72,7 @@ void PrintRequestType(int type) {
 
 Engine::Engine() {
    dns_ = new Dns();
-   server_ = new Server();
    cache_ = new Cache();
-   stream_ = new Stream();
 
    if (Settings::AstraMode) {
       http_ = new AstraHttpClient();
@@ -83,6 +82,13 @@ Engine::Engine() {
       } else {
          http_ = new HttpClient();
       }
+   }
+   server_ = new Server();
+
+   if (Settings::HLSMode) {
+      stream_ = new HLSStream();
+   } else {
+      stream_ = new Stream();
    }
 
    ring_ = (struct io_uring *)malloc(sizeof(struct io_uring));
@@ -260,6 +266,8 @@ void Engine::Run() {
                stream_->RemoveRequest(request);
                Utils::ReleaseRequest(request);
                Log(__FILE__, __LINE__) << "Remove client closed";
+            } else {
+               stream_->ProcessNext(request);
             }
             break;
          case EVENT_TYPE_SERVER_CLOSE:
@@ -304,12 +312,14 @@ void Engine::Run() {
             dns_->AddFetchAAAARequest(request, Settings::UseSSL);
             break;
          case EVENT_TYPE_HTTP_FETCH:
-            http_->HandleFetchRequest(request, false);
-            Utils::ReleaseRequest(request);
+            if (http_->HandleFetchRequest(request, false)) {
+               Utils::ReleaseRequest(request);
+            }
             break;
          case EVENT_TYPE_HTTP_FETCH_IPV4:
-            http_->HandleFetchRequest(request, true);
-            Utils::ReleaseRequest(request);
+            if (http_->HandleFetchRequest(request, true)) {
+               Utils::ReleaseRequest(request);
+            }
             break;
          case EVENT_TYPE_HTTP_READ_HEADER:
             http_->HandleReadHeaderRequest(request, response);

@@ -177,6 +177,19 @@ std::string Utils::ReplaceHeaderTag(std::string header,
    return header;
 }
 
+std::string Utils::RemoveHeaderTag(std::string header,
+      const std::string &to_search) {
+   std::string tmp = "\r\n" + to_search + ":";
+   int pos = ci_find_substr(header, tmp);
+   if (pos < 0) {
+      return header;
+   } else {
+      std::string first = header.substr(0, pos);
+      std::string second = header.substr(pos + 2);
+      return first + second.substr(second.find("\r\n"));
+   }
+}
+
 std::string Utils::GetHeaderTag(std::string header,
                                 const std::string &to_search) {
    std::string tmp = "\r\n" + to_search + ":";
@@ -201,4 +214,22 @@ int Utils::EndsWith(const char *str, const char *suffix) {
    if (suffix_len > str_len) return 0;
 
    return 0 == strncmp(str + str_len - suffix_len, suffix, suffix_len);
+}
+
+struct Request *Utils::CopyRequest(struct Request *request) {
+   struct Request *copy = CreateRequest(request->iovec_count);
+   copy->resource_id = request->resource_id;
+   copy->event_type = request->event_type;
+   copy->client_socket = request->client_socket;
+   copy->is_processing = request->is_processing;
+   copy->pivot = request->pivot;
+
+   for (int i = 0; i < request->iovec_count; i++) {
+      copy->iov[i].iov_base = malloc(request->iov[i].iov_len);
+      memcpy(copy->iov[i].iov_base, request->iov[i].iov_base,
+             request->iov[i].iov_len);
+      copy->iov[i].iov_len = 0;
+   }
+
+   return copy;
 }

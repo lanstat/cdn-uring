@@ -53,7 +53,7 @@ int Http::GetResourceType(char *header, int size) {
    if (connection == "close") {
       return RESOURCE_TYPE_CACHE;
    }
-   return Settings::HLSMode ? RESOURCE_TYPE_STREAMING : RESOURCE_TYPE_CACHE;
+   return RESOURCE_TYPE_STREAMING;
 }
 
 int Http::FetchHeaderLength(char *header, int size) {
@@ -86,6 +86,7 @@ std::string Http::ProcessExternalHeader(struct Request *http) {
 
    //tmp = Utils::ReplaceHeaderTag(tmp, "Server", "cdn/0.1.0");
    // tmp = Utils::ReplaceHeaderTag(tmp, "ETag", GetEtag(http->resource_id));
+   tmp = Utils::RemoveHeaderTag(tmp, "Content-Length");
 
    return tmp;
 }
@@ -172,4 +173,17 @@ int Http::HandleReadData(struct Request *http, int readed) {
 int Http::GetStatusCode(std::string header) {
    std::string status_code = header.substr(9, 3);
    return std::stoi(status_code);
+}
+
+void Http::Retry(struct Request *request, bool ipv4) {
+   Log(__FILE__, __LINE__, Log::kWarning) << "Retry " << request->resource_id;
+   int msecs = 200;
+
+   struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
+   struct __kernel_timespec ts;
+   ts.tv_sec = msecs / 1000;
+   ts.tv_nsec = (msecs % 1000) * 1000000;
+   io_uring_prep_timeout(sqe, &ts, 0, 0);
+   io_uring_sqe_set_data(sqe, request);
+   io_uring_submit(ring_);
 }

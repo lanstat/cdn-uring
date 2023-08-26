@@ -21,8 +21,11 @@ struct Mux {
    struct iovec header;
    unsigned int pivot;
    int type;
+   int tag;
    bool is_completed;
+   bool in_memory;
    std::string path;
+   std::string url;
    std::string etag;
    struct iovec *buffer;
 };

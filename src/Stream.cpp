@@ -52,7 +52,8 @@ bool Stream::HandleExistsResource(struct Request *entry) {
    }
 
    struct Request *stream = Utils::StreamRequest(entry);
-   struct Mux *mux = CreateMux();
+   std::string url((char *)entry->iov[1].iov_base);
+   struct Mux *mux = CreateMux(url);
    mux->requests.push_back(stream);
    std::pair<uint64_t, struct Mux *> item(stream->resource_id, mux);
    resources_.insert(item);
@@ -71,11 +72,17 @@ void Stream::AddWriteHeaders(struct Request *stream, struct Mux *mux) {
 
 void Stream::HandleWriteHeaders(struct Request *stream) {
    struct Mux *mux = resources_.at(stream->resource_id);
-   stream->pivot = mux->pivot;
+   if (mux->requests.size() > 1) {
+      stream->pivot = mux->requests.at(1)->pivot;
+   } else {
+      stream->pivot = mux->pivot;
+   }
    memset(stream->iov[0].iov_base, 0, Settings::HttpBufferSize);
 
    if (mux->type == RESOURCE_TYPE_CACHE) {
-      AddWriteFromCacheRequest(stream, mux);
+      if (!mux->in_memory) {
+         AddWriteFromCacheRequest(stream, mux);
+      }
    } else if (mux->type == RESOURCE_TYPE_STREAMING) {
       AddWriteStreamRequest(stream);
    }
@@ -173,7 +180,12 @@ int Stream::AddWriteStreamRequest(struct Request *stream) {
 
    size_t size = mux->buffer[stream->pivot].iov_len;
    if (size == EMPTY_BUFFER || size == 0) {
-      stream->auxiliar = BUFFER_SIZE;
+      if (mux->in_memory) {
+         server_->AddCloseRequest(stream);
+         RemoveRequest(stream);
+         return 1;
+      }
+      //stream->auxiliar = BUFFER_SIZE;
       return 1;
    }
 
@@ -206,7 +218,7 @@ void Stream::ReleaseErrorAllWaitingRequest(uint64_t resource_id,
    ReleaseResource(resource_id);
 }
 
-struct Mux *Stream::CreateMux() {
+struct Mux *Stream::CreateMux(std::string url) {
    struct Mux *mux = new Mux();
    std::vector<struct Request *> requests;
 
@@ -216,6 +228,8 @@ struct Mux *Stream::CreateMux() {
    mux->type = RESOURCE_TYPE_UNDEFINED;
    mux->header.iov_len = 0;
    mux->is_completed = false;
+   mux->url = url;
+   mux->in_memory = false;
 
    for (int i = 0; i < Settings::StreamingBufferSize; i++) {
       mux->buffer[i].iov_len = 0;
@@ -286,16 +300,30 @@ bool Stream::ExistsResource(uint64_t resource_id) {
    return resources_.find(resource_id) != resources_.end();
 }
 
-int Stream::NotifyCache(uint64_t resource_id, bool is_completed) {
+int Stream::NotifyCacheCompleted(uint64_t resource_id, struct iovec *buffer, int size) {
    if (resources_.find(resource_id) == resources_.end()) {
       return 1;
    }
 
    struct Mux *mux = resources_.at(resource_id);
-   mux->is_completed = is_completed;
+   mux->is_completed = true;
+   if (mux->in_memory) {
+      for (int i = 0; i < size; i++) {
+         size_t length = buffer[i].iov_len;
+         mux->buffer[i].iov_base = malloc(length);
+         memcpy(mux->buffer[i].iov_base, buffer[i].iov_base, length);
+         mux->buffer[i].iov_len = length;
+      }
+      mux->pivot = size;
+   }
+
    for (struct Request *const c : mux->requests) {
       if (!c->is_processing) {
-         HandleCopyCacheRequest(c, 0);
+         if (mux->in_memory) {
+            AddWriteStreamRequest(c);
+         } else {
+            HandleCopyCacheRequest(c, 0);
+         }
       }
    }
    return 0;
@@ -329,8 +357,8 @@ int Stream::AddWriteFromCacheRequest(struct Request *stream, struct Mux *mux) {
 }
 
 bool Stream::HandleReadCacheRequest(struct Request *stream, int readed) {
-   struct Mux *mux = resources_.at(stream->resource_id);
    if (readed == 0) {
+      struct Mux *mux = resources_.at(stream->resource_id);
       if (mux->is_completed) {
          close(stream->auxiliar);
          RemoveRequest(stream);
@@ -349,9 +377,17 @@ int Stream::HandleCopyCacheRequest(struct Request *stream, int readed) {
    stream->is_processing = true;
    stream->event_type = EVENT_TYPE_CACHE_READ_CONTENT;
    struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
+   // Read from cache, auxiliar is the file descriptor
    io_uring_prep_read(sqe, stream->auxiliar, stream->iov[0].iov_base,
                       Settings::HttpBufferSize, stream->pivot);
    io_uring_sqe_set_data(sqe, stream);
    io_uring_submit(ring_);
    return 0;
+}
+
+void Stream::ProcessNext(struct Request *stream) {
+   auto mux = GetResource(stream->resource_id);
+   if (mux->in_memory) {
+      AddWriteStreamRequest(stream);
+   }
 }

@@ -22,16 +22,18 @@ class Stream {
 
    int AddWriteStreamRequest(struct Request *stream);
 
-   bool HandleExistsResource(struct Request *entry);
+   virtual bool HandleExistsResource(struct Request *entry);
    void AbortStream(uint64_t resource_id);
    void CloseStream(uint64_t resource_id);
 
    int NotifyStream(uint64_t resource_id, void *buffer, int size);
 
-   int NotifyCache(uint64_t resource_id, bool is_completed);
+   virtual int NotifyCacheCompleted(uint64_t resource_id, struct iovec *buffer, int size);
    int AddWriteFromCacheRequest(struct Request *stream, struct Mux *mux);
    bool HandleReadCacheRequest(struct Request *stream, int readed);
    int HandleCopyCacheRequest(struct Request *stream, int readed);
+
+   void ProcessNext(struct Request *stream);
 
    int RemoveRequest(struct Request *request);
    void ReleaseErrorAllWaitingRequest(uint64_t resource_id, int status_code);
@@ -39,12 +41,12 @@ class Stream {
    struct Mux *GetResource(uint64_t resource_id);
    bool ExistsResource(uint64_t resource_id);
 
-  private:
+  protected:
    struct io_uring *ring_;
    Server *server_;
    std::unordered_map<uint64_t, struct Mux *> resources_;
 
-   struct Mux *CreateMux();
+   struct Mux *CreateMux(std::string url);
    void ReleaseResource(uint64_t resource_id);
 };
 #endif

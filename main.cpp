@@ -75,6 +75,14 @@ void ParserArguments(int argc, char** argv) {
             }
             continue;
         }
+        if (memcmp(argv[i], "-base-url=", 10) == 0) {
+            std::string tmp(argv[i]);
+            Settings::BaseUrl = tmp.substr(10);
+            if (Settings::BaseUrl.front() != '/') {
+                Settings::BaseUrl = "/" + Settings::BaseUrl;
+            }
+            continue;
+        }
         if (memcmp(argv[i], "-host-file=", 11) == 0) {
             std::string tmp(argv[i]);
             Settings::HostFile = tmp.substr(11);

@@ -22,6 +22,7 @@ class AstraHttpClient : public HttpClient {
  private:
   struct Playlist {
     std::string url;
+    std::string last_track;
     std::vector<std::string> tracks;
     std::vector<int> tracks_duration;
     std::chrono::time_point<std::chrono::system_clock> start_time;
@@ -33,7 +34,8 @@ class AstraHttpClient : public HttpClient {
   bool ProcessReproduction(struct Request *http);
   void ReleaseSocket(struct Request *http) override;
   void RequestTrack(struct Request *http, std::string url, int msecs = 0);
-  bool PlayNextTrack(struct Request *http, bool is_first = false);
+  void RequestPlaylist(struct Request *http, std::string url);
+  bool PlayNextTrack(struct Request *http);
   void ReleasePlaylist(struct Request *http);
   void CreatePlaylist(struct Request *http);
   int GetTimeout(struct Request *http);

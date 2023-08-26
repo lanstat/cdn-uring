@@ -48,7 +48,9 @@ int AstraHttpClient::HandleReadHeaderRequest(struct Request *http, int readed) {
 
    if (resource->type == RESOURCE_TYPE_UNDEFINED) {
       new_header =
-          Utils::ReplaceHeaderTag(new_header, "Content-Type", "video/mpeg");
+          Utils::ReplaceHeaderTag(new_header, "Content-Type", "video/MPEG");
+      new_header =
+          Utils::ReplaceHeaderTag(new_header, "Connection", "keep-alive");
       stream_->SetStreamingResource(http->resource_id, new_header);
    }
 
@@ -90,8 +92,7 @@ int AstraHttpClient::HandleReadData(struct Request *http, int readed) {
             return 1;
          }
          auto playlist = playlist_.at(http->resource_id);
-         int timeout = GetTimeout(http);
-         RequestTrack(http, playlist->url, timeout);
+         RequestPlaylist(http, playlist->url);
       }
       ReleaseSocket(http);
       return 1;
@@ -136,12 +137,19 @@ bool AstraHttpClient::ProcessReproduction(struct Request *http) {
    std::string content((char *)http->iov[0].iov_base);
    std::stringstream stream(content);
    std::string line;
+   struct Playlist *playlist = playlist_.at(http->resource_id);
+
    while (std::getline(stream, line)) {
       if (line.rfind("#EXTINF:", 0) == 0) {
          std::string url;
          std::getline(stream, url);
          if (url.rfind("http", 0) == 0) {
             url = url.replace(url.begin(), url.begin() + 7, "/");
+
+            if (url == playlist->last_track) {
+               continue;
+            }
+
             Log(__FILE__, __LINE__, Log::kDebug) << "Found TS: " << url;
 
             if (!ExistsPlaylist(http)) {
@@ -150,14 +158,17 @@ bool AstraHttpClient::ProcessReproduction(struct Request *http) {
             std::string seconds = line.substr(8, line.find(',') - 8);
             seconds.erase(std::remove(seconds.begin(), seconds.end(), '.'),
                           seconds.end());
-            playlist_.at(http->resource_id)->tracks.push_back(url);
-            playlist_.at(http->resource_id)
-                ->tracks_duration.push_back(std::stoi(seconds));
+            playlist->tracks.push_back(url);
+            playlist->tracks_duration.push_back(std::stoi(seconds));
          }
       }
    }
 
-   return PlayNextTrack(http, true);
+   if (playlist->tracks.empty()) {
+      return false;
+   }
+
+   return PlayNextTrack(http);
 }
 
 bool AstraHttpClient::ProcessPlaylist(struct Request *http) {
@@ -186,21 +197,18 @@ bool AstraHttpClient::ProcessPlaylist(struct Request *http) {
    return false;
 }
 
-bool AstraHttpClient::PlayNextTrack(struct Request *http, bool is_first) {
+bool AstraHttpClient::PlayNextTrack(struct Request *http) {
    if (!ExistsPlaylist(http)) {
       return false;
    }
    if (!playlist_.at(http->resource_id)->tracks.empty()) {
-      std::string url = playlist_.at(http->resource_id)->tracks.front();
-      playlist_.at(http->resource_id)
-          ->tracks.erase(playlist_.at(http->resource_id)->tracks.begin());
+      struct Playlist *playlist = playlist_.at(http->resource_id);
+      std::string url = playlist->tracks.front();
+      playlist->tracks.erase(playlist_.at(http->resource_id)->tracks.begin());
 
-      if (is_first) {
-         RequestTrack(http, url);
-      } else {
-         int timeout = GetTimeout(http);
-         RequestTrack(http, url, timeout);
-      }
+      playlist->last_track = url;
+      int timeout = GetTimeout(http);
+      RequestTrack(http, url, timeout);
       return true;
    }
 
@@ -212,6 +220,11 @@ int AstraHttpClient::GetTimeout(struct Request *http) {
    playlist_.at(http->resource_id)
        ->tracks_duration.erase(
            playlist_.at(http->resource_id)->tracks_duration.begin());
+
+   if (duration == 0) {
+      return 0;
+   }
+
    auto now = std::chrono::system_clock::now();
    std::chrono::duration<double> elapsed_seconds =
        now - playlist_.at(http->resource_id)->start_time;
@@ -234,7 +247,9 @@ void AstraHttpClient::RequestTrack(struct Request *http, std::string url,
 
    struct Request *inner = Utils::InnerRequest(http);
 
-   Log(__FILE__, __LINE__, log_level) << "Requesting Track: " << url;
+   Log(__FILE__, __LINE__, log_level)
+       << "Requesting Track: " << http->resource_id << " " << msecs << " "
+       << url;
    int size = url.size() + 1;
    inner->iov[2].iov_len = size;
    inner->iov[2].iov_base = malloc(size);
@@ -270,6 +285,42 @@ void AstraHttpClient::RequestTrack(struct Request *http, std::string url,
    io_uring_submit(ring_);
 }
 
+void AstraHttpClient::RequestPlaylist(struct Request *http, std::string url) {
+   if (url.empty()) {
+      return;
+   }
+
+   struct Request *inner = Utils::InnerRequest(http);
+
+   Log(__FILE__, __LINE__, Log::kDebug)
+       << "Requesting Playlist: " << http->resource_id << " " << url;
+   int size = url.size() + 1;
+   inner->iov[2].iov_len = size;
+   inner->iov[2].iov_base = malloc(size);
+   memset(inner->iov[2].iov_base, 0, size);
+   memcpy(inner->iov[2].iov_base, url.c_str(), size);
+
+   std::stringstream ss;
+   ss << "User-Agent: Lavf/60.3.100\r\n"
+      << "Connection: close\r\n"
+      << "Icy-MetaData: 1\r\n"
+      << "Accept: */*\r\n";
+
+   std::string header = ss.str();
+   size = header.size() + 1;
+
+   inner->iov[3].iov_len = size;
+   inner->iov[3].iov_base = malloc(size);
+   memset(inner->iov[3].iov_base, 0, size);
+   memcpy(inner->iov[3].iov_base, header.c_str(), size);
+
+   inner->event_type = EVENT_TYPE_DNS_FETCHAAAA;
+   struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
+   io_uring_prep_nop(sqe);
+   io_uring_sqe_set_data(sqe, inner);
+   io_uring_submit(ring_);
+}
+
 void AstraHttpClient::ReleasePlaylist(struct Request *http) {
    auto it = playlist_.at(http->resource_id);
    delete it;
@@ -280,6 +331,7 @@ void AstraHttpClient::CreatePlaylist(struct Request *http) {
    struct Playlist *playlist = new Playlist();
    std::vector<std::string> tracks;
    std::vector<int> tracks_duration;
+   tracks_duration.push_back(0);
 
    playlist->tracks = tracks;
    playlist->tracks_duration = tracks_duration;

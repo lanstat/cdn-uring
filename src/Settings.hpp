@@ -17,6 +17,7 @@ class Settings {
    static bool AstraMode;
    static bool IPv6Mode;
    static std::string Proxy;
+   static std::string BaseUrl;
    static std::string HostFile;
 };
 #endif

@@ -9,7 +9,7 @@
 #include "Request.hpp"
 #include "Utils.hpp"
 #include "Settings.hpp"
-#include "xxhash64.h"
+#include "Helpers.hpp"
 
 #define READ_SZ 8192
 
@@ -95,7 +95,7 @@ bool Server::HandleRead(struct Request *entry_request) {
       entry_request->iov[2].iov_len = strlen(header) + 1;
       strcpy((char *)entry_request->iov[2].iov_base, header);
 
-      entry_request->resource_id = GetResourceId(path);
+      entry_request->resource_id = Helpers::GetResourceId(path);
 
       return true;
    }
@@ -213,11 +213,6 @@ void Server::HandleClose(struct Request *request) {
    Log(__FILE__, __LINE__) << "Socket close";
    close(request->client_socket);
    Utils::ReleaseRequest(request);
-}
-
-uint64_t Server::GetResourceId(char *url) {
-   std::string aux(url);
-   return XXHash64::hash(url, aux.length(), 0);
 }
 
 void Server::AddWriteHeaderRequest(struct Request *stream) {
