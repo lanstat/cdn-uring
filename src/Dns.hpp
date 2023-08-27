@@ -18,7 +18,7 @@ class Dns : public DnsSeeker {
 
   void SetRing(struct io_uring *ring);
 
-  void AddVerifyUDPRequest();
+  void AddVerifyUDPRequest(struct Request *request);
   int HandleVerifyUDP();
 
   void AddFetchAAAARequest(struct Request *request, bool isHttps);

@@ -12,7 +12,7 @@ class Utils {
   public:
    static void *ZhMalloc(size_t size);
    static void StrToLower(char *str);
-   static struct Request *CreateRequest(int iovec_count);
+   static struct Request *CreateRequest(int iovec_count, int event_type = 0);
    static struct Request *HttpEntryRequest();
    static struct Request *StreamRequest(struct Request *entry);
    static struct Request *InnerRequest(struct Request *entry);
@@ -22,7 +22,7 @@ class Utils {
    static struct Request *HttpExternalRequest(struct Request *cache);
    static struct Request *HttpsExternalRequest(struct Request *inner);
    static void ReleaseRequest(struct Request *request);
-   static std::string ReplaceHeaderTag(std::string header,
+   static std::string ReplaceHeaderTag(const std::string &header,
                                        const std::string &to_search,
                                        const std::string &replaced);
    static std::string RemoveHeaderTag(std::string header,

@@ -5,6 +5,7 @@
 #include <cstring>
 
 #include "Settings.hpp"
+#include "EventType.hpp"
 
 /*
  * Utility function to convert a string to lower case.
@@ -25,7 +26,7 @@ void *Utils::ZhMalloc(size_t size) {
    return buf;
 }
 
-struct Request *Utils::CreateRequest(int iovec_count) {
+struct Request *Utils::CreateRequest(int iovec_count, int event_type) {
    struct Request *req =
        (Request *)malloc(sizeof(*req) + sizeof(struct iovec) * iovec_count);
    req->iovec_count = iovec_count;
@@ -35,6 +36,8 @@ struct Request *Utils::CreateRequest(int iovec_count) {
    req->pivot = 0;
    req->is_processing = false;
    req->debug = false;
+   req->event_type = event_type;
+
    return req;
 }
 
@@ -161,24 +164,25 @@ int ci_find_substr(const T &str1, const T &str2,
    }
 }
 
-std::string Utils::ReplaceHeaderTag(std::string header,
+std::string Utils::ReplaceHeaderTag(const std::string &header,
                                     const std::string &to_search,
                                     const std::string &replaced) {
    std::string tmp = "\r\n" + to_search + ":";
    int pos = ci_find_substr(header, tmp);
+   std::string response;
    if (pos < 0) {
-      header = header + tmp + " " + replaced + "\r\n";
+      response = header + tmp + " " + replaced + "\r\n";
    } else {
       std::string first = header.substr(0, pos);
       std::string second = header.substr(pos + 2);
-      header =
+      response =
           first + tmp + " " + replaced + second.substr(second.find("\r\n"));
    }
-   return header;
+   return response;
 }
 
 std::string Utils::RemoveHeaderTag(std::string header,
-      const std::string &to_search) {
+                                   const std::string &to_search) {
    std::string tmp = "\r\n" + to_search + ":";
    int pos = ci_find_substr(header, tmp);
    if (pos < 0) {

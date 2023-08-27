@@ -196,9 +196,8 @@ int Engine::AddAcceptRequest(int server_socket, struct sockaddr_in *client_addr,
    struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
    io_uring_prep_accept(sqe, server_socket, (struct sockaddr *)client_addr,
                         client_addr_len, 0);
-   struct Request *req = (Request *)malloc(sizeof(*req));
+   struct Request *req = Utils::CreateRequest(0);
    req->event_type = EVENT_TYPE_ACCEPT;
-   req->iovec_count = 0;
    io_uring_sqe_set_data(sqe, req);
    io_uring_submit(ring_);
 
@@ -225,7 +224,7 @@ void Engine::Run() {
    http_->SetStream(stream_);
 
    AddAcceptRequest(socket_, &client_addr, &client_addr_len);
-   dns_->AddVerifyUDPRequest();
+   dns_->AddVerifyUDPRequest(Utils::CreateRequest(0, EVENT_TYPE_DNS_VERIFY));
    // cache_->AddVerifyRequest();
 
    while (1) {
@@ -305,8 +304,7 @@ void Engine::Run() {
             break;
          case EVENT_TYPE_DNS_VERIFY:
             dns_->HandleVerifyUDP();
-            dns_->AddVerifyUDPRequest();
-            Utils::ReleaseRequest(request);
+            dns_->AddVerifyUDPRequest(request);
             break;
          case EVENT_TYPE_DNS_FETCHAAAA:
             dns_->AddFetchAAAARequest(request, Settings::UseSSL);

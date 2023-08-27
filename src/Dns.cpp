@@ -10,6 +10,7 @@
 #include "Logger.hpp"
 #include "Request.hpp"
 #include "Settings.hpp"
+#include "Utils.hpp"
 
 #define VERIFY_TIMEOUT 50000000  // 50 ms
 
@@ -44,7 +45,7 @@ int Dns::HandleVerifyUDP() {
    return 0;
 }
 
-void Dns::AddVerifyUDPRequest() {
+void Dns::AddVerifyUDPRequest(struct Request *request) {
    struct timespec rts;
    int ret = clock_gettime(CLOCK_MONOTONIC, &rts);
    if (ret < 0) {
@@ -53,14 +54,11 @@ void Dns::AddVerifyUDPRequest() {
    }
    rts.tv_nsec += VERIFY_TIMEOUT;
    // rts.tv_sec += 5;
-   struct Request *req = (Request *)malloc(sizeof(*req) + sizeof(struct iovec));
-   req->event_type = EVENT_TYPE_DNS_VERIFY;
-   req->iovec_count = 0;
 
    struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);
    io_uring_prep_timeout(sqe, (struct __kernel_timespec *)&rts, 1,
                          IORING_TIMEOUT_ABS);
-   io_uring_sqe_set_data(sqe, req);
+   io_uring_sqe_set_data(sqe, request);
    io_uring_submit(ring_);
 }
 
