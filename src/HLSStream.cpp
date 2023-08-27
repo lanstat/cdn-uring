@@ -35,13 +35,13 @@ bool HLSStream::HandleExistsResource(struct Request *entry) {
          mux->in_memory = true;
       } else if (Utils::EndsWith(path, ".m3u8")) {
          mux->tag = SEGMENT_PLAYLIST_TAG;
-         GeneratePlaylist(mux);
+         mux->in_memory = true;
       } else {
          mux->tag = SEGMENT_TAG;
       }
    } else {
-      if (mux->tag == SEGMENT_PLAYLIST_TAG) {
-         GeneratePlaylist(mux);
+      if (mux->tag == SEGMENT_PLAYLIST_TAG && mux->is_completed) {
+         GeneratePlaylist(entry->resource_id, mux);
       }
    }
    return exists;
@@ -61,7 +61,12 @@ int HLSStream::NotifyCacheCompleted(uint64_t resource_id, struct iovec *buffer,
       ProcessSegmentList(segment, buffer, size);
       ReleaseResource(resource_id);
       RemoveSegment(resource_id);
-      return 0;
+
+      // Notify parent segment is completed
+      resource_id = segment->segment_parent;
+      size = 0;
+      auto mux = GetResource(resource_id);
+      GeneratePlaylist(resource_id, mux);
    }
    return Stream::NotifyCacheCompleted(resource_id, buffer, size);
 }
@@ -97,16 +102,16 @@ void HLSStream::ProcessChannel(struct Mux *mux, struct iovec *buffer,
       }
 
       int pos = content.find(Settings::Proxy);
-      //if (pos != std::string::npos) {
-         //while (pos != std::string::npos) {
-            //content.replace(pos, Settings::Proxy.length(), Settings::BaseUrl);
-            //pos = content.find(Settings::Proxy);
-         //}
+      if (pos != std::string::npos) {
+         while (pos != std::string::npos) {
+            content.replace(pos, Settings::Proxy.length(), Settings::BaseUrl);
+            pos = content.find(Settings::Proxy);
+         }
 
-         //memset(buffer[i].iov_base, 0, buffer[i].iov_len);
-         //buffer[i].iov_len = content.length();
-         //memcpy(buffer[i].iov_base, (void *)content.c_str(), content.length());
-      //}
+         memset(buffer[i].iov_base, 0, buffer[i].iov_len);
+         buffer[i].iov_len = content.length();
+         memcpy(buffer[i].iov_base, (void *)content.c_str(), content.length());
+      }
    }
 }
 
@@ -128,16 +133,21 @@ void HLSStream::ProcessSegmentList(struct Segment *segment,
             std::getline(stream, url);
             if (url.rfind("http", 0) == 0) {
                found = true;
-               url = url.replace(url.begin(), url.begin() + 7, "/");
-               Log(__FILE__, __LINE__) << "Found TS: " << url;
+               std::string tmp = url;
+               tmp = tmp.replace(tmp.begin(), tmp.begin() + 7, "/");
+               Log(__FILE__, __LINE__) << "Found TS: " << tmp;
 
                std::string seconds = line.substr(8, line.find(',') - 8);
                seconds.erase(std::remove(seconds.begin(), seconds.end(), '.'),
                              seconds.end());
                auto stamp = std::stoi(seconds);
                epoch_ms += stamp;
-               playlist->segments.insert(
-                   std::pair<long, std::string>(epoch_ms, std::string()));
+
+               int pos = url.find(Settings::Proxy);
+               url.replace(pos, Settings::Proxy.length(), Settings::BaseUrl);
+
+               playlist->segments.insert(std::pair<long, std::string>(
+                   epoch_ms, line + "\n" + url + "\n"));
             }
          }
       }
@@ -156,6 +166,9 @@ void HLSStream::CreatePlaylist(uint64_t resource_id, std::string channel_url) {
 
    struct Mux *mux = CreateMux(std::string());
    mux->tag = SEGMENT_PLAYLIST_TAG;
+   mux->type = RESOURCE_TYPE_CACHE;
+   mux->in_memory = true;
+   mux->is_completed = false;
 
    std::stringstream ss;
    ss << "HTTP/1.1 200 OK\r\n"
@@ -176,8 +189,6 @@ void HLSStream::CreatePlaylist(uint64_t resource_id, std::string channel_url) {
    memset(mux->header.iov_base, 0, size);
    memcpy(mux->header.iov_base, header.c_str(), size);
 
-   mux->type = RESOURCE_TYPE_STREAMING;
-
    std::pair<uint64_t, struct Mux *> item(resource_id, mux);
    resources_.insert(item);
 }
@@ -187,6 +198,7 @@ void HLSStream::RequestFile(uint64_t parent_id, std::string url, int tag,
    uint64_t resource_id = Helpers::GetResourceId(url.c_str());
    struct Mux *mux = CreateMux(std::string());
    mux->tag = tag;
+   mux->in_memory = true;
    std::pair<uint64_t, struct Mux *> item(resource_id, mux);
    resources_.insert(item);
 
@@ -247,11 +259,23 @@ long HLSStream::GetTicks() {
    return epoch_ms;
 }
 
-void HLSStream::GeneratePlaylist(struct Mux *mux) {
+void HLSStream::GeneratePlaylist(uint64_t resource_id, struct Mux *mux) {
    std::stringstream ss;
-   ss << "#EXTM3U\r\n"
-      << "#EXT-X-VERSION:3\r\n"
-      << "#EXT-X-ALLOW-CACHE:NO\r\n"
-      << "#EXT-X-TARGETDURATION:10\r\n"
-      << "#EXT-X-MEDIA-SEQUENCE:0\r\n";
+   ss << "#EXT-X-VERSION:3\r\n";
+   ss << "#EXT-X-TARGETDURATION:3\r\n";
+   ss << "#EXT-X-MEDIA-SEQUENCE:2086\r\n";
+
+   struct SegmentPlaylist *playlist = playlists_.at(resource_id);
+   for (auto segment : playlist->segments) {
+      ss << segment.second;
+   }
+   std::string content = ss.str();
+   int size = content.size() + 1;
+
+   mux->buffer[0].iov_len = size;
+   mux->buffer[0].iov_base = malloc(size);
+   memset(mux->buffer[0].iov_base, 0, size);
+   memcpy(mux->buffer[0].iov_base, content.c_str(), size);
+   std::cout << "LAN_[" << __FILE__ << ":" << __LINE__ << "] "
+             << "generated" << std::endl;
 }

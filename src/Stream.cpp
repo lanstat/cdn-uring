@@ -82,6 +82,8 @@ void Stream::HandleWriteHeaders(struct Request *stream) {
    if (mux->type == RESOURCE_TYPE_CACHE) {
       if (!mux->in_memory) {
          AddWriteFromCacheRequest(stream, mux);
+      } else {
+         AddWriteStreamRequest(stream);
       }
    } else if (mux->type == RESOURCE_TYPE_STREAMING) {
       AddWriteStreamRequest(stream);
@@ -172,15 +174,18 @@ int Stream::AddWriteStreamRequest(struct Request *stream) {
 
    struct Mux *mux = resources_.at(stream->resource_id);
 
+   // TODO : fix this
+   /*
    if (stream->auxiliar > 0) {
       size_t size = mux->buffer[mux->pivot - 1].iov_len;
       stream->auxiliar -= size;
       return 1;
    }
+   */
 
    size_t size = mux->buffer[stream->pivot].iov_len;
    if (size == EMPTY_BUFFER || size == 0) {
-      if (mux->in_memory) {
+      if (mux->in_memory && mux->is_completed) {
          server_->AddCloseRequest(stream);
          RemoveRequest(stream);
          return 1;
@@ -308,13 +313,15 @@ int Stream::NotifyCacheCompleted(uint64_t resource_id, struct iovec *buffer, int
    struct Mux *mux = resources_.at(resource_id);
    mux->is_completed = true;
    if (mux->in_memory) {
-      for (int i = 0; i < size; i++) {
-         size_t length = buffer[i].iov_len;
-         mux->buffer[i].iov_base = malloc(length);
-         memcpy(mux->buffer[i].iov_base, buffer[i].iov_base, length);
-         mux->buffer[i].iov_len = length;
+      if (size > 0) {
+         for (int i = 0; i < size; i++) {
+            size_t length = buffer[i].iov_len;
+            mux->buffer[i].iov_base = malloc(length);
+            memcpy(mux->buffer[i].iov_base, buffer[i].iov_base, length);
+            mux->buffer[i].iov_len = length;
+         }
+         mux->pivot = mux->pivot + size;
       }
-      mux->pivot = size;
    }
 
    for (struct Request *const c : mux->requests) {

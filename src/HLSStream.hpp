@@ -39,7 +39,7 @@ class HLSStream : public Stream {
    void RemoveSegment(uint64_t resource_id);
 
    long GetTicks();
-   void GeneratePlaylist(struct Mux *mux);
+   void GeneratePlaylist(uint64_t resource_id, struct Mux *mux);
 
 };
 #endif

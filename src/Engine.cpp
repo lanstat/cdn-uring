@@ -330,6 +330,9 @@ void Engine::Run() {
          case EVENT_TYPE_CACHE_VERIFY_INVALID:
             // TODO(lanstat): add verify cache
             break;
+         case EVENT_TYPE_STREAM_NEXT:
+            stream_->ProcessNext(request);
+            break;
       }
 
       /* Mark this request as processed */

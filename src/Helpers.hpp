@@ -12,5 +12,6 @@ class Helpers {
   public:
    static uint64_t GetResourceId(const char *url);
    static void SendRequestNop(struct io_uring *ring, struct Request *request, int timeout);
+   static void CloseFD(int fd);
 };
 #endif

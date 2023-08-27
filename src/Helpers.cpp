@@ -23,3 +23,9 @@ void Helpers::SendRequestNop(struct io_uring *ring, struct Request *request,
    io_uring_sqe_set_data(sqe, request);
    io_uring_submit(ring);
 }
+
+void Helpers::CloseFD(int fd) {
+   if (fd > 0) {
+      close(fd);
+   }
+}

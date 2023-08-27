@@ -101,7 +101,7 @@ int Cache::HandleReadHeader(struct Request *cache, int readed) {
    std::string header_data((char *)cache->iov[0].iov_base);
    stream_->SetCacheResource(cache->resource_id, header_data, path, true);
 
-   close(cache->client_socket);
+   Helpers::CloseFD(cache->client_socket);
    Utils::ReleaseRequest(cache);
    return 0;
 }
@@ -152,9 +152,7 @@ bool Cache::AddWriteHeaderRequest(struct Request *header, std::string path) {
 }
 
 bool Cache::HandleWriteHeader(struct Request *cache, int writed) {
-   if (cache->client_socket) {
-      close(cache->client_socket);
-   }
+   Helpers::CloseFD(cache->client_socket);
    Utils::ReleaseRequest(cache);
    return true;
 }
@@ -279,9 +277,7 @@ void Cache::ReleaseBuffer(uint64_t resource_id) {
       }
    }
 
-   if (node->cache->client_socket > 0) {
-      close(node->cache->client_socket);
-   }
+   Helpers::CloseFD(node->cache->client_socket);
 
    delete[] node->buffer;
    delete node;
