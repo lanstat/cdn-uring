@@ -23,7 +23,9 @@ void Stream::SetRing(struct io_uring *ring) { ring_ = ring; }
 
 bool Stream::HandleExistsResource(struct Request *entry) {
    if (resources_.find(entry->resource_id) != resources_.end()) {
+      std::cout<< "LAN_[" << __FILE__ << ":" << __LINE__ << "] "<< "aa" << std::endl;
       struct Mux *mux = resources_.at(entry->resource_id);
+      std::cout<< "LAN_[" << __FILE__ << ":" << __LINE__ << "] "<< "aa" << std::endl;
 
       std::string header_data((char *)entry->iov[2].iov_base);
 
@@ -44,6 +46,7 @@ bool Stream::HandleExistsResource(struct Request *entry) {
       }
 
       struct Request *stream = Utils::StreamRequest(entry);
+      std::cout<< "LAN_[" << __FILE__ << ":" << __LINE__ << "] "<< mux->requests.size() << std::endl;
       mux->requests.push_back(stream);
       if (mux->type != RESOURCE_TYPE_UNDEFINED) {
          AddWriteHeaders(stream, mux);

@@ -16,30 +16,30 @@ class HLSStream : public Stream {
   protected:
    struct SegmentPlaylist {
       uint64_t resource_id;
+      int remaining_fetches;
       std::string url;
-      std::map<long, std::string> segments;
-   };
-
-   struct Segment {
-      uint64_t segment_parent;
-      int tag;
-      bool is_last;
+      std::vector<std::string> track_urls;
+      std::vector<uint64_t> track_uids;
+      std::vector<long> track_stamps;
    };
 
    std::unordered_map<uint64_t, struct SegmentPlaylist *> playlists_;
-   std::unordered_map<uint64_t, struct Segment *> segments_;
+   std::unordered_map<uint64_t, uint64_t> segments_;
 
   private:
-   void ProcessChannel(struct Mux *mux, struct iovec *buffer, int size);
-   void ProcessSegmentList(struct Segment *segment, struct iovec *buffer, int size);
+   void ProcessChannel(struct Mux *mux, struct iovec *buffer, int size, uint64_t parent_id);
+   bool ProcessSegmentList(uint64_t parent_id, struct iovec *buffer, int size);
    void CreatePlaylist(uint64_t resource_id, std::string channel_url);
    void AppendSegments();
    void RequestPlaylist(uint64_t resource_id, std::string url);
    void RequestFile(uint64_t parent_id, std::string url, int tag, int msecs = 0);
-   void RemoveSegment(uint64_t resource_id);
 
    long GetTicks();
    void GeneratePlaylist(uint64_t resource_id, struct Mux *mux);
+   void CreateSegment(uint64_t resource_id, uint64_t parent);
+
+   void RemoveSegment(uint64_t resource_id);
+   void RemovePlaylist(uint64_t resource_id);
 
 };
 #endif
