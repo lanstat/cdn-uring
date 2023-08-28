@@ -7,6 +7,7 @@
 #include <iostream>
 
 #include "EventType.hpp"
+#include "Helpers.hpp"
 #include "Logger.hpp"
 #include "Request.hpp"
 #include "Settings.hpp"
@@ -411,4 +412,36 @@ void Stream::ProcessNext(struct Request *stream) {
    if (mux->in_memory) {
       AddWriteStreamRequest(stream);
    }
+}
+
+void Stream::HandleCleanup(struct Request *request) {
+   if (resource_ttl_.empty()) {
+      Helpers::Nop(ring_, request, 1000);
+      return;
+   }
+
+   long now = Helpers::GetTicks();
+
+   bool found = false;
+   while (!resource_ttl_.empty()) {
+      auto resource = *resource_ttl_.begin();
+      if (resource.first > now) {
+         break;
+      }
+
+      ReleaseResource(resource.second);
+      Helpers::CleanCache(resource.second);
+      resource_ttl_.erase(resource_ttl_.begin());
+      found = true;
+   }
+
+   if (found) {
+      Log(__FILE__, __LINE__, Log::kWarning) << "Cleaned resources";
+   }
+   Helpers::Nop(ring_, request, 1000);
+}
+
+void Stream::AddResourceTTL(uint64_t resource_id, int ttl) {
+   long now = Helpers::GetTicks();
+   resource_ttl_.insert(std::make_pair(now + ttl, resource_id));
 }

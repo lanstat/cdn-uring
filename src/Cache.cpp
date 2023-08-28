@@ -252,7 +252,7 @@ void Cache::CloseBuffer(uint64_t resource_id) {
    auto mux = stream_->GetResource(resource_id);
    if (mux->in_memory) {
       node->cache->event_type = EVENT_TYPE_CACHE_WRITE_CONTENT;
-      Helpers::SendRequestNop(ring_, node->cache, 100);
+      Helpers::Nop(ring_, node->cache, 100);
    }
 }
 

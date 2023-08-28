@@ -79,13 +79,15 @@ std::string Http::GetExternalHeader(char *header) {
 }
 
 std::string Http::ProcessExternalHeader(struct Request *http) {
-   void *header = malloc(http->iov[0].iov_len);
-   memcpy(header, http->iov[0].iov_base, http->iov[0].iov_len);
+   int size = http->iov[0].iov_len + 1;
+   void *header = malloc(size);
+   memset(header, 0, size);
+   memcpy(header, http->iov[0].iov_base, size - 1);
    std::string tmp((char *)header);
    free(header);
 
-   //tmp = Utils::ReplaceHeaderTag(tmp, "Server", "cdn/0.1.0");
-   // tmp = Utils::ReplaceHeaderTag(tmp, "ETag", GetEtag(http->resource_id));
+   // tmp = Utils::ReplaceHeaderTag(tmp, "Server", "cdn/0.1.0");
+   //  tmp = Utils::ReplaceHeaderTag(tmp, "ETag", GetEtag(http->resource_id));
 
    return tmp;
 }

@@ -210,7 +210,7 @@ void Server::AddCloseRequest(struct Request *request) {
 }
 
 void Server::HandleClose(struct Request *request) {
-   Log(__FILE__, __LINE__) << "Socket close";
+   Log(__FILE__, __LINE__, Log::kDebug) << "Socket closed";
    close(request->client_socket);
    Utils::ReleaseRequest(request);
 }

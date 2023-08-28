@@ -4,6 +4,7 @@
 #include "Mux.hpp"
 #include "Request.hpp"
 #include "Server.hpp"
+#include <map>
 
 class Stream {
   public:
@@ -41,13 +42,17 @@ class Stream {
    struct Mux *GetResource(uint64_t resource_id);
    bool ExistsResource(uint64_t resource_id);
 
+   void HandleCleanup(struct Request *request);
+
   protected:
    struct io_uring *ring_;
    Server *server_;
    std::unordered_map<uint64_t, struct Mux *> resources_;
+   std::map<long, uint64_t> resource_ttl_;
 
    struct Mux *CreateMux(uint64_t resource_id, std::string url);
    void ReleaseResource(uint64_t resource_id);
+   void AddResourceTTL(uint64_t resource_id, int timeout);
 };
 #endif
 

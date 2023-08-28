@@ -36,7 +36,6 @@ class HLSStream : public Stream {
    void RequestPlaylist(uint64_t resource_id, std::string url);
    void RequestFile(uint64_t parent_id, std::string url, int tag, int msecs = 0);
 
-   long GetTicks();
    void GenerateSegmentClientList(uint64_t resource_id, struct Mux *mux);
    void CreateSegment(uint64_t resource_id, uint64_t parent);
 

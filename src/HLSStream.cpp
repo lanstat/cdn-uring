@@ -23,6 +23,8 @@
 #define REMAINING_FETCHES 20
 #define MAX_TRACKS_PER_PLAYLIST 4
 
+#define TIMEOUT_TRACK 15000
+
 HLSStream::HLSStream() {}
 
 bool HLSStream::HandleExistsResource(struct Request *entry) {
@@ -60,6 +62,7 @@ int HLSStream::NotifyCacheCompleted(uint64_t resource_id, struct iovec *buffer,
                                     int size) {
    auto mux = GetResource(resource_id);
    if (mux->tag == SEGMENT_TAG) {
+      AddResourceTTL(resource_id, TIMEOUT_TRACK);
       return Stream::NotifyCacheCompleted(resource_id, buffer, size);
    }
 
@@ -118,7 +121,7 @@ void HLSStream::ProcessChannel(struct Mux *mux, struct iovec *buffer, int size,
                std::string path =
                    url.replace(url.begin(), url.begin() + 7, "/");
                path = path.substr(path.find("/", 1));
-               Log(__FILE__, __LINE__) << "Found playlist: " << path;
+               Log(__FILE__, __LINE__, Log::kDebug) << "Found playlist: " << path;
 
                uint64_t resource_id = parent_id;
 
@@ -163,7 +166,7 @@ bool HLSStream::ProcessSegmentList(uint64_t parent_id, struct iovec *buffer,
    }
    playlist->remaining_fetches--;
 
-   long epoch_ms = GetTicks();
+   long epoch_ms = Helpers::GetTicks();
    int timeout = 0;
 
    bool found = false;
@@ -228,6 +231,7 @@ void HLSStream::CreatePlaylist(uint64_t resource_id, uint64_t channel_id,
    playlist->channel_id = channel_id;
    playlist->url = channel_url;
    playlist->remaining_fetches = REMAINING_FETCHES;
+   playlist->sequence = 10000;
    playlists_.insert(
        std::pair<uint64_t, struct SegmentPlaylist *>(resource_id, playlist));
 
@@ -303,15 +307,7 @@ void HLSStream::RequestFile(uint64_t parent_id, std::string url, int tag,
    memset(inner->iov[3].iov_base, 0, size);
    memcpy(inner->iov[3].iov_base, header.c_str(), size);
 
-   Helpers::SendRequestNop(ring_, inner, msecs);
-}
-
-long HLSStream::GetTicks() {
-   auto now = std::chrono::system_clock::now();
-   auto now_ms = std::chrono::time_point_cast<std::chrono::milliseconds>(now);
-   auto epoch = now_ms.time_since_epoch();
-   long epoch_ms = epoch.count();
-   return epoch_ms;
+   Helpers::Nop(ring_, inner, msecs);
 }
 
 void HLSStream::GenerateSegmentClientList(uint64_t resource_id,
@@ -321,7 +317,7 @@ void HLSStream::GenerateSegmentClientList(uint64_t resource_id,
       return;
    }
    struct SegmentPlaylist *playlist = playlists_.at(resource_id);
-   long ticks = GetTicks();
+   long ticks = Helpers::GetTicks();
 
    std::stringstream ss;
    ss << "#EXTM3U\r\n";
@@ -349,7 +345,7 @@ void HLSStream::GenerateSegmentClientList(uint64_t resource_id,
       ss << urls.at(pivot + i);
    }
    std::string content = ss.str();
-   int size = content.size() + 1;
+   int size = content.size();
 
    mux->buffer[0].iov_len = size;
    mux->buffer[0].iov_base = malloc(size);
@@ -368,12 +364,14 @@ void HLSStream::RemovePlaylist(uint64_t resource_id) {
        << "Removing playlist " << resource_id;
    auto playlist = playlists_.at(resource_id);
 
-   auto channel_mux = GetResource(playlist->channel_id);
-   const std::vector<struct Request *> &requests = channel_mux->requests;
-   for (struct Request *const c : requests) {
-      Utils::ReleaseRequest(c);
+   if (ExistsResource(playlist->channel_id)) {
+      auto channel_mux = GetResource(playlist->channel_id);
+      const std::vector<struct Request *> &requests = channel_mux->requests;
+      for (struct Request *const c : requests) {
+         Utils::ReleaseRequest(c);
+      }
+      ReleaseResource(channel_mux->resource_id);
    }
-   ReleaseResource(playlist->channel_id);
 
    delete playlist;
    playlists_.erase(resource_id);

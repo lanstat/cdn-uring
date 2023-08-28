@@ -225,6 +225,7 @@ void Engine::Run() {
 
    AddAcceptRequest(socket_, &client_addr, &client_addr_len);
    dns_->AddVerifyUDPRequest(Utils::CreateRequest(0, EVENT_TYPE_DNS_VERIFY));
+   stream_->HandleCleanup(Utils::CreateRequest(0, EVENT_TYPE_CACHE_CLEAN));
    // cache_->AddVerifyRequest();
 
    while (1) {
@@ -244,7 +245,7 @@ void Engine::Run() {
       switch (request->event_type) {
          case EVENT_TYPE_ACCEPT:
             Utils::ReleaseRequest(request);
-            Log(__FILE__, __LINE__) << "Accept http request";
+            Log(__FILE__, __LINE__, Log::kDebug) << "Accept http request";
 
             AddAcceptRequest(socket_, &client_addr, &client_addr_len);
             server_->AddReadRequest(cqe->res);
@@ -330,6 +331,9 @@ void Engine::Run() {
             break;
          case EVENT_TYPE_STREAM_NEXT:
             stream_->ProcessNext(request);
+            break;
+         case EVENT_TYPE_CACHE_CLEAN:
+            stream_->HandleCleanup(request);
             break;
       }
 
