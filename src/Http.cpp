@@ -86,7 +86,6 @@ std::string Http::ProcessExternalHeader(struct Request *http) {
 
    //tmp = Utils::ReplaceHeaderTag(tmp, "Server", "cdn/0.1.0");
    // tmp = Utils::ReplaceHeaderTag(tmp, "ETag", GetEtag(http->resource_id));
-   tmp = Utils::RemoveHeaderTag(tmp, "Content-Length");
 
    return tmp;
 }

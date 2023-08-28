@@ -46,7 +46,7 @@ class Stream {
    Server *server_;
    std::unordered_map<uint64_t, struct Mux *> resources_;
 
-   struct Mux *CreateMux(std::string url);
+   struct Mux *CreateMux(uint64_t resource_id, std::string url);
    void ReleaseResource(uint64_t resource_id);
 };
 #endif

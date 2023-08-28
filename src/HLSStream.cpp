@@ -20,7 +20,8 @@
 #define CHANNEL_INNER_TAG 0x05
 #define SEGMENT_INNER_PLAYLIST_TAG 0x06
 
-#define REMAINING_FETCHES 5
+#define REMAINING_FETCHES 20
+#define MAX_TRACKS_PER_PLAYLIST 4
 
 HLSStream::HLSStream() {}
 
@@ -34,6 +35,7 @@ bool HLSStream::HandleExistsResource(struct Request *entry) {
          mux->tag = CHANNEL_LIST_TAG;
       } else if (Utils::EndsWith(path, "/index.m3u8")) {
          mux->tag = CHANNEL_TAG;
+         mux->transfer_mode = TRANSFER_MODE_WAIT_UNTIL_COMPLETE;
          mux->in_memory = true;
       } else if (Utils::EndsWith(path, ".m3u8")) {
          mux->tag = SEGMENT_PLAYLIST_TAG;
@@ -47,7 +49,7 @@ bool HLSStream::HandleExistsResource(struct Request *entry) {
          struct SegmentPlaylist *playlist = playlists_.at(entry->resource_id);
          playlist->remaining_fetches = REMAINING_FETCHES;
          if (mux->is_completed) {
-            GeneratePlaylist(entry->resource_id, mux);
+            GenerateSegmentClientList(entry->resource_id, mux);
          }
       }
    }
@@ -57,13 +59,11 @@ bool HLSStream::HandleExistsResource(struct Request *entry) {
 int HLSStream::NotifyCacheCompleted(uint64_t resource_id, struct iovec *buffer,
                                     int size) {
    auto mux = GetResource(resource_id);
-   if (mux->tag == CHANNEL_TAG) {
-      ProcessChannel(mux, buffer, size, 0);
-   } else if (mux->tag == CHANNEL_INNER_TAG) {
-      uint64_t parent_id = segments_.at(resource_id);
-      ProcessChannel(mux, buffer, size, parent_id);
-      RemoveSegment(resource_id);
-   } else if (mux->tag == SEGMENT_INNER_PLAYLIST_TAG) {
+   if (mux->tag == SEGMENT_TAG) {
+      return Stream::NotifyCacheCompleted(resource_id, buffer, size);
+   }
+
+   if (mux->tag == SEGMENT_INNER_PLAYLIST_TAG) {
       uint64_t parent_id = segments_.at(resource_id);
       bool proceed = ProcessSegmentList(parent_id, buffer, size);
       RemoveSegment(resource_id);
@@ -73,16 +73,35 @@ int HLSStream::NotifyCacheCompleted(uint64_t resource_id, struct iovec *buffer,
          resource_id = parent_id;
          size = 0;
          auto mux = GetResource(resource_id);
-         GeneratePlaylist(resource_id, mux);
+         GenerateSegmentClientList(resource_id, mux);
       } else {
          return 1;
       }
    }
-   return Stream::NotifyCacheCompleted(resource_id, buffer, size);
+
+   struct iovec *new_buffer = new struct iovec[size];
+   if (mux->tag == CHANNEL_TAG) {
+      ProcessChannel(mux, buffer, size, 0, new_buffer);
+   } else if (mux->tag == CHANNEL_INNER_TAG) {
+      uint64_t parent_id = segments_.at(resource_id);
+      ProcessChannel(mux, buffer, size, parent_id, new_buffer);
+      RemoveSegment(resource_id);
+   }
+   int response = Stream::NotifyCacheCompleted(resource_id, new_buffer, size);
+
+   for (int i = 0; i < size; i++) {
+      if (new_buffer[i].iov_len > 0) {
+         free(new_buffer[i].iov_base);
+      }
+   }
+
+   delete[] new_buffer;
+
+   return response;
 }
 
 void HLSStream::ProcessChannel(struct Mux *mux, struct iovec *buffer, int size,
-                               uint64_t parent_id) {
+                               uint64_t parent_id, struct iovec *new_buffer) {
    struct Request *channel = mux->requests[0];
 
    for (int i = 0; i < size; i++) {
@@ -107,10 +126,11 @@ void HLSStream::ProcessChannel(struct Mux *mux, struct iovec *buffer, int size,
                if (parent_id == 0) {
                   resource_id = Helpers::GetResourceId(path.c_str());
                   if (playlists_.find(resource_id) == playlists_.end()) {
-                     CreatePlaylist(resource_id, mux->url);
+                     CreatePlaylist(resource_id, mux->resource_id, mux->url);
                   }
                }
                RequestFile(resource_id, url, SEGMENT_INNER_PLAYLIST_TAG, 100);
+               break;
             }
          }
       }
@@ -122,9 +142,13 @@ void HLSStream::ProcessChannel(struct Mux *mux, struct iovec *buffer, int size,
             pos = content.find(Settings::Proxy);
          }
 
-         memset(buffer[i].iov_base, 0, buffer[i].iov_len);
-         buffer[i].iov_len = content.length();
-         memcpy(buffer[i].iov_base, (void *)content.c_str(), content.length());
+         new_buffer[i].iov_len = content.length();
+         new_buffer[i].iov_base = malloc(new_buffer[i].iov_len);
+         memset(new_buffer[i].iov_base, 0, new_buffer[i].iov_len);
+         memcpy(new_buffer[i].iov_base, (void *)content.c_str(),
+                content.length());
+
+         UpdateHeader(mux, content.length());
       }
    }
 }
@@ -173,37 +197,44 @@ bool HLSStream::ProcessSegmentList(uint64_t parent_id, struct iovec *buffer,
                tmp = tmp.replace(tmp.begin(), tmp.begin() + 7, "/");
                Log(__FILE__, __LINE__) << "Found TS: " << tmp;
 
+               int pos = url.find(Settings::Proxy);
+               if (pos != std::string::npos) {
+                  url.replace(pos, Settings::Proxy.length(), Settings::BaseUrl);
+               }
+
                std::string block = line + "\n" + url + "\n";
                playlist->track_stamps.push_back(epoch_ms + timeout);
                playlist->track_uids.push_back(uid);
                playlist->track_urls.push_back(block);
+               playlist->sequence++;
             }
          }
       }
    }
 
-   std::cout << "LAN_[" << __FILE__ << ":" << __LINE__ << "] "
-             << playlist->track_uids.size() << std::endl;
    if (!found) {
       RequestFile(playlist->resource_id, playlist->url, CHANNEL_INNER_TAG, 500);
    } else {
       RequestFile(playlist->resource_id, playlist->url, CHANNEL_INNER_TAG,
-                  timeout - 8000);
+                  2500);
    }
    return true;
 }
 
-void HLSStream::CreatePlaylist(uint64_t resource_id, std::string channel_url) {
+void HLSStream::CreatePlaylist(uint64_t resource_id, uint64_t channel_id,
+                               std::string channel_url) {
    auto playlist = new SegmentPlaylist();
    playlist->resource_id = resource_id;
+   playlist->channel_id = channel_id;
    playlist->url = channel_url;
    playlist->remaining_fetches = REMAINING_FETCHES;
    playlists_.insert(
        std::pair<uint64_t, struct SegmentPlaylist *>(resource_id, playlist));
 
-   struct Mux *mux = CreateMux(std::string());
+   struct Mux *mux = CreateMux(resource_id, std::string());
    mux->tag = SEGMENT_PLAYLIST_TAG;
    mux->type = RESOURCE_TYPE_CACHE;
+   mux->transfer_mode = TRANSFER_MODE_WAIT_UNTIL_COMPLETE;
    mux->in_memory = true;
    mux->is_completed = false;
 
@@ -211,9 +242,9 @@ void HLSStream::CreatePlaylist(uint64_t resource_id, std::string channel_url) {
    ss << "HTTP/1.1 200 OK\r\n"
       << "Server: Astra\r\n"
       << "Cache-Control: no-cache\r\n"
+      << "Content-Length: 0\r\n"
       << "Access-Control-Allow-Origin: *\r\n"
       << "Access-Control-Allow-Methods: GET\r\n"
-      << "X-Id: G2T\r\n"
       << "Access-Control-Allow-Credentials: true\r\n"
       << "Content-Type: application/vnd.apple.mpegURL\r\n"
       << "Connection: close\r\n"
@@ -234,7 +265,7 @@ void HLSStream::CreatePlaylist(uint64_t resource_id, std::string channel_url) {
 void HLSStream::RequestFile(uint64_t parent_id, std::string url, int tag,
                             int msecs) {
    uint64_t resource_id = Helpers::GetResourceId(url.c_str());
-   struct Mux *mux = CreateMux(std::string());
+   struct Mux *mux = CreateMux(resource_id, std::string());
    mux->tag = tag;
    mux->in_memory = true;
    std::pair<uint64_t, struct Mux *> item(resource_id, mux);
@@ -275,6 +306,79 @@ void HLSStream::RequestFile(uint64_t parent_id, std::string url, int tag,
    Helpers::SendRequestNop(ring_, inner, msecs);
 }
 
+long HLSStream::GetTicks() {
+   auto now = std::chrono::system_clock::now();
+   auto now_ms = std::chrono::time_point_cast<std::chrono::milliseconds>(now);
+   auto epoch = now_ms.time_since_epoch();
+   long epoch_ms = epoch.count();
+   return epoch_ms;
+}
+
+void HLSStream::GenerateSegmentClientList(uint64_t resource_id,
+                                          struct Mux *mux) {
+   // Only generate playlist if there are pending requests
+   if (mux->requests.empty()) {
+      return;
+   }
+   struct SegmentPlaylist *playlist = playlists_.at(resource_id);
+   long ticks = GetTicks();
+
+   std::stringstream ss;
+   ss << "#EXTM3U\r\n";
+   ss << "#EXT-X-VERSION:3\r\n";
+   ss << "#EXT-X-TARGETDURATION:3\r\n";
+   ss << "#EXT-X-MEDIA-SEQUENCE:" << playlist->sequence << "\r\n";
+
+   // Only copy the tracks that are after the current ticks
+   int pivot = 0;
+   const std::vector<long> &stamps = playlist->track_stamps;
+   for (int i = 0; i < stamps.size(); i++) {
+      if (stamps[i] > ticks) {
+         pivot = i;
+         if (pivot > 0) {
+            pivot--;
+         }
+         break;
+      }
+   }
+   const std::vector<std::string> &urls = playlist->track_urls;
+   for (int i = 0; i < MAX_TRACKS_PER_PLAYLIST; i++) {
+      if ((pivot + i) >= urls.size()) {
+         break;
+      }
+      ss << urls.at(pivot + i);
+   }
+   std::string content = ss.str();
+   int size = content.size() + 1;
+
+   mux->buffer[0].iov_len = size;
+   mux->buffer[0].iov_base = malloc(size);
+   memset(mux->buffer[0].iov_base, 0, size);
+   memcpy(mux->buffer[0].iov_base, content.c_str(), size);
+
+   UpdateHeader(mux, size);
+}
+
+void HLSStream::CreateSegment(uint64_t resource_id, uint64_t parent) {
+   segments_.insert(std::pair<uint64_t, uint64_t>(resource_id, parent));
+}
+
+void HLSStream::RemovePlaylist(uint64_t resource_id) {
+   Log(__FILE__, __LINE__, Log::kWarning)
+       << "Removing playlist " << resource_id;
+   auto playlist = playlists_.at(resource_id);
+
+   auto channel_mux = GetResource(playlist->channel_id);
+   const std::vector<struct Request *> &requests = channel_mux->requests;
+   for (struct Request *const c : requests) {
+      Utils::ReleaseRequest(c);
+   }
+   ReleaseResource(playlist->channel_id);
+
+   delete playlist;
+   playlists_.erase(resource_id);
+}
+
 void HLSStream::RemoveSegment(uint64_t resource_id) {
    auto mux = GetResource(resource_id);
    const std::vector<struct Request *> &requests = mux->requests;
@@ -286,48 +390,15 @@ void HLSStream::RemoveSegment(uint64_t resource_id) {
    segments_.erase(resource_id);
 }
 
-long HLSStream::GetTicks() {
-   auto now = std::chrono::system_clock::now();
-   auto now_ms = std::chrono::time_point_cast<std::chrono::milliseconds>(now);
-   auto epoch = now_ms.time_since_epoch();
-   long epoch_ms = epoch.count();
-   return epoch_ms;
-}
+void HLSStream::UpdateHeader(struct Mux *mux, int content_length) {
+   std::string header((char *)mux->header.iov_base);
 
-void HLSStream::GeneratePlaylist(uint64_t resource_id, struct Mux *mux) {
-   // Only generate playlist if there are pending requests
-   if (mux->requests.empty()) {
-      return;
+   header = Utils::ReplaceHeaderTag(header, "Content-Length", std::to_string(content_length));
+   if (mux->header.iov_len > 0) {
+      free(mux->header.iov_base);
    }
-
-   std::stringstream ss;
-   ss << "#EXT-X-VERSION:3\r\n";
-   ss << "#EXT-X-TARGETDURATION:3\r\n";
-   ss << "#EXT-X-MEDIA-SEQUENCE:2086\r\n";
-
-   long ticks = GetTicks();
-
-   struct SegmentPlaylist *playlist = playlists_.at(resource_id);
-   for (auto url : playlist->track_urls) {
-      ss << url;
-   }
-   std::string content = ss.str();
-   int size = content.size() + 1;
-
-   mux->buffer[0].iov_len = size;
-   mux->buffer[0].iov_base = malloc(size);
-   memset(mux->buffer[0].iov_base, 0, size);
-   memcpy(mux->buffer[0].iov_base, content.c_str(), size);
-}
-
-void HLSStream::CreateSegment(uint64_t resource_id, uint64_t parent) {
-   segments_.insert(std::pair<uint64_t, uint64_t>(resource_id, parent));
-}
-
-void HLSStream::RemovePlaylist(uint64_t resource_id) {
-   Log(__FILE__, __LINE__, Log::kWarning)
-       << "Removing playlist " << resource_id;
-   auto playlist = playlists_.at(resource_id);
-   delete playlist;
-   playlists_.erase(resource_id);
+   mux->header.iov_len = header.size();
+   mux->header.iov_base = malloc(mux->header.iov_len);
+   memset(mux->header.iov_base, 0, mux->header.iov_len);
+   memcpy(mux->header.iov_base, (void *)header.c_str(), header.size());
 }

@@ -17,11 +17,13 @@ struct Node {
 };
 
 struct Mux {
+   uint64_t resource_id;
    std::vector<struct Request *> requests;
    struct iovec header;
    unsigned int pivot;
    int type;
    int tag;
+   int transfer_mode;
    bool is_completed;
    bool in_memory;
    std::string path;

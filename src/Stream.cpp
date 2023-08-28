@@ -53,7 +53,7 @@ bool Stream::HandleExistsResource(struct Request *entry) {
 
    struct Request *stream = Utils::StreamRequest(entry);
    std::string url((char *)entry->iov[1].iov_base);
-   struct Mux *mux = CreateMux(url);
+   struct Mux *mux = CreateMux(stream->resource_id, url);
    mux->requests.push_back(stream);
    std::pair<uint64_t, struct Mux *> item(stream->resource_id, mux);
    resources_.insert(item);
@@ -62,6 +62,11 @@ bool Stream::HandleExistsResource(struct Request *entry) {
 }
 
 void Stream::AddWriteHeaders(struct Request *stream, struct Mux *mux) {
+   if (!mux->is_completed) {
+      if (mux->transfer_mode != TRANSFER_MODE_HEADER_SOON_AS_POSSIBLE) {
+         return;
+      }
+   }
    stream->iov[0].iov_base = malloc(Settings::HttpBufferSize);
    stream->iov[0].iov_len = mux->header.iov_len;
    memcpy(stream->iov[0].iov_base, mux->header.iov_base,
@@ -192,7 +197,7 @@ int Stream::AddWriteStreamRequest(struct Request *stream) {
          RemoveRequest(stream);
          return 1;
       }
-      //stream->auxiliar = BUFFER_SIZE;
+      // stream->auxiliar = BUFFER_SIZE;
       return 1;
    }
 
@@ -225,7 +230,7 @@ void Stream::ReleaseErrorAllWaitingRequest(uint64_t resource_id,
    ReleaseResource(resource_id);
 }
 
-struct Mux *Stream::CreateMux(std::string url) {
+struct Mux *Stream::CreateMux(uint64_t resource_id, std::string url) {
    struct Mux *mux = new Mux();
    std::vector<struct Request *> requests;
 
@@ -233,10 +238,12 @@ struct Mux *Stream::CreateMux(std::string url) {
    mux->pivot = 0;
    mux->buffer = new iovec[Settings::StreamingBufferSize];
    mux->type = RESOURCE_TYPE_UNDEFINED;
+   mux->transfer_mode = TRANSFER_MODE_HEADER_SOON_AS_POSSIBLE;
    mux->header.iov_len = 0;
    mux->is_completed = false;
    mux->url = url;
    mux->in_memory = false;
+   mux->resource_id = resource_id;
 
    for (int i = 0; i < Settings::StreamingBufferSize; i++) {
       mux->buffer[i].iov_len = 0;
@@ -307,7 +314,8 @@ bool Stream::ExistsResource(uint64_t resource_id) {
    return resources_.find(resource_id) != resources_.end();
 }
 
-int Stream::NotifyCacheCompleted(uint64_t resource_id, struct iovec *buffer, int size) {
+int Stream::NotifyCacheCompleted(uint64_t resource_id, struct iovec *buffer,
+                                 int size) {
    if (resources_.find(resource_id) == resources_.end()) {
       return 1;
    }
@@ -328,6 +336,10 @@ int Stream::NotifyCacheCompleted(uint64_t resource_id, struct iovec *buffer, int
 
    for (struct Request *const c : mux->requests) {
       if (!c->is_processing) {
+         if (mux->transfer_mode == TRANSFER_MODE_WAIT_UNTIL_COMPLETE) {
+            AddWriteHeaders(c, mux);
+            continue;
+         }
          if (mux->in_memory) {
             AddWriteStreamRequest(c);
          } else {
