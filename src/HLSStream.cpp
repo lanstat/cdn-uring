@@ -20,10 +20,11 @@
 #define CHANNEL_INNER_TAG 0x05
 #define SEGMENT_INNER_PLAYLIST_TAG 0x06
 
-#define REMAINING_FETCHES 20
+#define REMAINING_FETCHES 10
 #define MAX_TRACKS_PER_PLAYLIST 4
 
 #define TIMEOUT_TRACK 15000
+#define TRACK_DELTA 150
 
 HLSStream::HLSStream() {}
 
@@ -121,7 +122,8 @@ void HLSStream::ProcessChannel(struct Mux *mux, struct iovec *buffer, int size,
                std::string path =
                    url.replace(url.begin(), url.begin() + 7, "/");
                path = path.substr(path.find("/", 1));
-               Log(__FILE__, __LINE__, Log::kDebug) << "Found playlist: " << path;
+               Log(__FILE__, __LINE__, Log::kDebug)
+                   << "Found playlist: " << path;
 
                uint64_t resource_id = parent_id;
 
@@ -166,10 +168,13 @@ bool HLSStream::ProcessSegmentList(uint64_t parent_id, struct iovec *buffer,
    }
    playlist->remaining_fetches--;
 
-   long epoch_ms = Helpers::GetTicks();
-   int timeout = 0;
-
+   long last_stamp = playlist->last_stamp;
+   if (last_stamp == 0) {
+      last_stamp = Helpers::GetTicks() + TRACK_DELTA;
+   }
+   int sequence = 0;
    bool found = false;
+
    for (int i = 0; i < size; i++) {
       if (buffer[i].iov_len == 0) continue;
       std::string content((char *)buffer[i].iov_base);
@@ -186,8 +191,8 @@ bool HLSStream::ProcessSegmentList(uint64_t parent_id, struct iovec *buffer,
                seconds.erase(std::remove(seconds.begin(), seconds.end(), '.'),
                              seconds.end());
                auto stamp = std::stoi(seconds);
-               timeout += stamp;
                uint64_t uid = Helpers::GetResourceId(url.c_str());
+               sequence++;
 
                if (std::find(playlist->track_uids.begin(),
                              playlist->track_uids.end(),
@@ -198,7 +203,8 @@ bool HLSStream::ProcessSegmentList(uint64_t parent_id, struct iovec *buffer,
                std::string tmp = url;
 
                tmp = tmp.replace(tmp.begin(), tmp.begin() + 7, "/");
-               Log(__FILE__, __LINE__) << "Found TS: " << tmp;
+               //Log(__FILE__, __LINE__) << "Found TS: " << tmp;
+               Log(__FILE__, __LINE__) << "Found TS: " << last_stamp;
 
                int pos = url.find(Settings::Proxy);
                if (pos != std::string::npos) {
@@ -206,13 +212,25 @@ bool HLSStream::ProcessSegmentList(uint64_t parent_id, struct iovec *buffer,
                }
 
                std::string block = line + "\n" + url + "\n";
-               playlist->track_stamps.push_back(epoch_ms + timeout);
+               playlist->track_stamps.push_back(last_stamp);
                playlist->track_uids.push_back(uid);
                playlist->track_urls.push_back(block);
-               playlist->sequence++;
+               playlist->track_sequence.push_back(sequence);
+
+               last_stamp += stamp;
             }
+         } else if (line.rfind("#EXT-X-MEDIA-SEQUENCE:", 0) == 0) {
+            std::string tmp = line.substr(22);
+            sequence = std::stoi(tmp);
+            sequence--;
+            continue;
          }
       }
+   }
+
+   if (playlist->last_stamp != last_stamp) {
+      playlist->last_stamp = last_stamp;
+      CleanTracks(playlist);
    }
 
    if (!found) {
@@ -231,7 +249,7 @@ void HLSStream::CreatePlaylist(uint64_t resource_id, uint64_t channel_id,
    playlist->channel_id = channel_id;
    playlist->url = channel_url;
    playlist->remaining_fetches = REMAINING_FETCHES;
-   playlist->sequence = 10000;
+   playlist->last_stamp = 0;
    playlists_.insert(
        std::pair<uint64_t, struct SegmentPlaylist *>(resource_id, playlist));
 
@@ -323,7 +341,6 @@ void HLSStream::GenerateSegmentClientList(uint64_t resource_id,
    ss << "#EXTM3U\r\n";
    ss << "#EXT-X-VERSION:3\r\n";
    ss << "#EXT-X-TARGETDURATION:3\r\n";
-   ss << "#EXT-X-MEDIA-SEQUENCE:" << playlist->sequence << "\r\n";
 
    // Only copy the tracks that are after the current ticks
    int pivot = 0;
@@ -331,12 +348,14 @@ void HLSStream::GenerateSegmentClientList(uint64_t resource_id,
    for (int i = 0; i < stamps.size(); i++) {
       if (stamps[i] > ticks) {
          pivot = i;
-         if (pivot > 0) {
-            pivot--;
-         }
+         // if (pivot > 0) {
+         // pivot--;
+         //}
          break;
       }
    }
+   ss << "#EXT-X-MEDIA-SEQUENCE:" << playlist->track_sequence.at(pivot)
+      << "\r\n";
    const std::vector<std::string> &urls = playlist->track_urls;
    for (int i = 0; i < MAX_TRACKS_PER_PLAYLIST; i++) {
       if ((pivot + i) >= urls.size()) {
@@ -391,7 +410,8 @@ void HLSStream::RemoveSegment(uint64_t resource_id) {
 void HLSStream::UpdateHeader(struct Mux *mux, int content_length) {
    std::string header((char *)mux->header.iov_base);
 
-   header = Utils::ReplaceHeaderTag(header, "Content-Length", std::to_string(content_length));
+   header = Utils::ReplaceHeaderTag(header, "Content-Length",
+                                    std::to_string(content_length));
    if (mux->header.iov_len > 0) {
       free(mux->header.iov_base);
    }
@@ -399,4 +419,22 @@ void HLSStream::UpdateHeader(struct Mux *mux, int content_length) {
    mux->header.iov_base = malloc(mux->header.iov_len);
    memset(mux->header.iov_base, 0, mux->header.iov_len);
    memcpy(mux->header.iov_base, (void *)header.c_str(), header.size());
+}
+
+void HLSStream::CleanTracks(struct SegmentPlaylist *playlist) {
+   if (playlist->track_urls.size() < 10) {
+      return;
+   }
+
+   int count = playlist->track_urls.size() - 10;
+   std::cout<< "LAN_[" << __FILE__ << ":" << __LINE__ << "] "<< count << std::endl;
+
+   playlist->track_urls.erase(playlist->track_urls.begin(),
+                              playlist->track_urls.begin() + count);
+   playlist->track_uids.erase(playlist->track_uids.begin(),
+                              playlist->track_uids.begin() + count);
+   playlist->track_stamps.erase(playlist->track_stamps.begin(),
+                                playlist->track_stamps.begin() + count);
+   playlist->track_sequence.erase(playlist->track_sequence.begin(),
+                                  playlist->track_sequence.begin() + count);
 }

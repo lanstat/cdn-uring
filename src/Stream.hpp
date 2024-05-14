@@ -42,7 +42,7 @@ class Stream {
    struct Mux *GetResource(uint64_t resource_id);
    bool ExistsResource(uint64_t resource_id);
 
-   void HandleCleanup(struct Request *request);
+   virtual void HandleCleanup(struct Request *request);
 
   protected:
    struct io_uring *ring_;
