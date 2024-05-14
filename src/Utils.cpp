@@ -55,7 +55,7 @@ struct Request *Utils::HttpEntryRequest() { return CreateRequest(3); }
  *
  * 0 = char* bytes with the error response
  */
-struct Request *Utils::HttpErrorRequest() { return CreateRequest(1); }
+struct Request *Utils::HttpErrorRequest() { return CreateRequest(1, 100); }
 
 /*
  * Object for http external request
@@ -137,6 +137,7 @@ void Utils::ReleaseRequest(struct Request *request) {
          free(request->iov[i].iov_base);
       }
    }
+   std::cout<< "LAN_[" << __FILE__ << ":" << __LINE__ << "] "<< request->event_type << std::endl;
    free(request);
 }
 

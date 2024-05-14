@@ -15,9 +15,10 @@ class Settings {
    static int StreamingBufferSize;
    static bool HLSMode;
    static bool AstraMode;
-   static bool IPv6Mode;
+   static int ListenMode;
    static std::string Proxy;
    static std::string BaseUrl;
+   static std::string UnixPath;
    static std::string HostFile;
 };
 #endif

@@ -63,8 +63,21 @@ void ParserArguments(int argc, char** argv) {
             Settings::CacheDir = tmp.substr(11);
             continue;
         }
-        if (strcmp(argv[i], "-ipv6") == 0) {
-            Settings::IPv6Mode = true;
+        if (memcmp(argv[i], "-listen-mode=", 13) == 0) {
+            std::string tmp(argv[i]);
+            std::string mode = tmp.substr(13);
+            if (mode == "unix") {
+                Settings::ListenMode = 3;
+            } else if (mode == "ipv6") {
+                Settings::ListenMode = 2;
+            } else {
+                Settings::ListenMode = 1;
+            }
+            continue;
+        }
+        if (memcmp(argv[i], "-unix-path=", 11) == 0) {
+            std::string tmp(argv[i]);
+            Settings::UnixPath = tmp.substr(11);
             continue;
         }
         if (memcmp(argv[i], "-proxy=", 7) == 0) {
@@ -107,8 +120,13 @@ int main(int argc, char** argv) {
     engine_ = new Engine();
     engine_->SetupListeningSocket(Settings::ServerPort);
 
-    Log(__FILE__, __LINE__)
-        << "Started server on localhost:" << Settings::ServerPort;
+    if (Settings::ListenMode == 3) {
+        Log(__FILE__, __LINE__)
+            << "Started server on " << Settings::UnixPath;
+    } else {
+        Log(__FILE__, __LINE__)
+            << "Started server on localhost:" << Settings::ServerPort;
+    }
 
     signal(SIGINT, SigIntHandler);
     signal(SIGPIPE, SIG_IGN);

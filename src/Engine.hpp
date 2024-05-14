@@ -44,5 +44,6 @@ class Engine {
 
    void ListenIpv4(int port);
    void ListenIpv6(int port);
+   void ListenUnixSocket();
 };
 #endif

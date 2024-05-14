@@ -1,9 +1,12 @@
 #include "Engine.hpp"
 
-#include "EventType.hpp"
-#include "HttpClient.hpp"
+#include <sys/socket.h>
+#include <sys/un.h>
+
 #include "AstraHttpClient.hpp"
+#include "EventType.hpp"
 #include "HLSStream.hpp"
+#include "HttpClient.hpp"
 #include "HttpsClient.hpp"
 #include "Logger.hpp"
 #include "Settings.hpp"
@@ -67,7 +70,7 @@ void PrintRequestType(int type) {
          type_str = "EVENT_TYPE_CACHE_CLOSE";
          break;
    }
-   Log(__FILE__, __LINE__, Log::kDebug) << type_str;
+   Log(__FILE__, __LINE__, Log::kDebug) << "[" << type << "] " << type_str;
 }
 
 Engine::Engine() {
@@ -118,8 +121,10 @@ void Engine::FatalError(const char *syscall) {
  * the web server.
  * */
 void Engine::SetupListeningSocket(int port) {
-   if (Settings::IPv6Mode) {
+   if (Settings::ListenMode == 2) {
       ListenIpv6(port);
+   } else if (Settings::ListenMode == 3) {
+      ListenUnixSocket();
    } else {
       ListenIpv4(port);
    }
@@ -153,6 +158,43 @@ void Engine::ListenIpv4(int port) {
 
    if (listen(sock, 10) < 0) {
       FatalError("listen()");
+   }
+
+   socket_ = sock;
+}
+
+void Engine::ListenUnixSocket() {
+   int sock;
+   struct sockaddr_un srv_addr;
+
+   sock = socket(AF_UNIX, SOCK_STREAM, 0);
+   if (sock == -1) {
+      FatalError("socket()");
+   }
+
+   srv_addr.sun_family = AF_UNIX;
+   strcpy(srv_addr.sun_path, Settings::UnixPath.c_str());
+   unlink(srv_addr.sun_path);
+   int len = strlen(srv_addr.sun_path) + sizeof(srv_addr.sun_family);
+
+   if (bind(sock, (const struct sockaddr *)&srv_addr, len) != 0) {
+      FatalError("bind()");
+   }
+
+   if (listen(sock, 4096) < 0) {
+      FatalError("listen()");
+   }
+
+   int flags, s;
+   flags = fcntl(sock, F_GETFL, 0);
+   if (flags == -1) {
+      FatalError("FCNTL get flags error");
+   } else {
+      flags |= O_NONBLOCK;
+      s = fcntl(sock, F_SETFL, flags);
+      if (s == -1) {
+         FatalError("FCNTL set flags error");
+      }
    }
 
    socket_ = sock;
@@ -238,7 +280,7 @@ void Engine::Run() {
 
       request->is_processing = false;
 
-      if (request->event_type != EVENT_TYPE_DNS_VERIFY) {
+      if (request->event_type != EVENT_TYPE_DNS_VERIFY && request->event_type != EVENT_TYPE_CACHE_CLEAN) {
          PrintRequestType(request->event_type);
       }
 
@@ -260,10 +302,12 @@ void Engine::Run() {
          } break;
          case EVENT_TYPE_SERVER_WRITE_COMPLETE:
             server_->HandleWrite(request, response);
+            break;
          case EVENT_TYPE_SERVER_WRITE_PARTIAL:
             // If failed to write to socket
             if (server_->HandleWriteStream(request, response) == 1) {
                stream_->RemoveRequest(request);
+
                Utils::ReleaseRequest(request);
                Log(__FILE__, __LINE__) << "Remove client closed";
             } else {

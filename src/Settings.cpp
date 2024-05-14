@@ -20,10 +20,12 @@ bool Settings::HLSMode = false;
 
 bool Settings::AstraMode = false;
 
-bool Settings::IPv6Mode = false;
+int Settings::ListenMode = 1; // 1=IPv4 2=IPv6 3=unix
 
 std::string Settings::Proxy = "";
 
 std::string Settings::BaseUrl = "";
 
 std::string Settings::HostFile = "";
+
+std::string Settings::UnixPath = "/tmp/cdn.sock";

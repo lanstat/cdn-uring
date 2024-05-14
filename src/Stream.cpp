@@ -275,6 +275,10 @@ void Stream::ReleaseResource(uint64_t resource_id) {
 int Stream::RemoveRequest(struct Request *request) {
    auto resource_id = request->resource_id;
 
+   if (resources_.find(resource_id) == resources_.end()) {
+      return 1;
+   }
+
    struct Mux *mux = resources_.at(resource_id);
    std::vector<struct Request *> requests = mux->requests;
    int pointer = 0;
