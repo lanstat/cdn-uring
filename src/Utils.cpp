@@ -137,7 +137,6 @@ void Utils::ReleaseRequest(struct Request *request) {
          free(request->iov[i].iov_base);
       }
    }
-   std::cout<< "LAN_[" << __FILE__ << ":" << __LINE__ << "] "<< request->event_type << std::endl;
    free(request);
 }
 

@@ -18,10 +18,19 @@ bool HttpClient::HandleFetchRequest(struct Request *inner, bool ipv4) {
    std::string url((char *)inner->iov[2].iov_base);
    url = url.substr(1);
    std::size_t pos = url.find("/");
-   std::string host = url.substr(0, pos);
-   std::string query = url.substr(pos);
+   std::string host;
+   std::string query;
 
-   Log(__FILE__, __LINE__, Log::kDebug) << "Requesting: " << query;
+   if (pos != std::string::npos) {
+      host = url.substr(0, pos);
+      query = url.substr(pos);
+   } else {
+      host = url;
+      query = "/";
+   }
+
+   Log(__FILE__, __LINE__, Log::kDebug)
+       << "Requesting: " << host << " " << query;
    int sock = -1;
    int is_connected = -1;
 
@@ -56,7 +65,8 @@ bool HttpClient::HandleFetchRequest(struct Request *inner, bool ipv4) {
          Retry(inner, ipv4);
          return false;
       } else {
-         Log(__FILE__, __LINE__, Log::kError) << "Could not connect " << strerror(errno);
+         Log(__FILE__, __LINE__, Log::kError)
+             << "Could not connect " << strerror(errno);
          stream_->ReleaseErrorAllWaitingRequest(inner->resource_id, 502);
       }
       return true;
@@ -87,13 +97,11 @@ bool HttpClient::HandleFetchRequest(struct Request *inner, bool ipv4) {
 
    http->iov[1].iov_len = inner->iov[2].iov_len;
    http->iov[1].iov_base = malloc(http->iov[1].iov_len);
-   memcpy(http->iov[1].iov_base, inner->iov[2].iov_base,
-          http->iov[1].iov_len);
+   memcpy(http->iov[1].iov_base, inner->iov[2].iov_base, http->iov[1].iov_len);
 
    http->iov[2].iov_len = inner->iov[4].iov_len;
    http->iov[2].iov_base = malloc(http->iov[2].iov_len);
-   memcpy(http->iov[2].iov_base, inner->iov[4].iov_base,
-          http->iov[2].iov_len);
+   memcpy(http->iov[2].iov_base, inner->iov[4].iov_base, http->iov[2].iov_len);
 
    // io_uring_prep_readv(sqe, sock, &http->iov[0], 1, 0);
    io_uring_prep_read(sqe, http->client_socket, http->iov[0].iov_base,
@@ -108,9 +116,7 @@ void HttpClient::ReleaseSocket(struct Request *http) {
    Utils::ReleaseRequest(http);
 }
 
-int HttpClient::PreRequest(struct Request *http, int readed) {
-   return readed;
-}
+int HttpClient::PreRequest(struct Request *http, int readed) { return readed; }
 
 int HttpClient::PostRequest(struct Request *http) {
    struct io_uring_sqe *sqe = io_uring_get_sqe(ring_);

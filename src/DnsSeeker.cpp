@@ -597,19 +597,18 @@ bool DnsSeeker::read8Bits(uint8_t &var, const char *const data, const int &size,
     return true;
 }
 
-//bool DnsSeeker::read16Bits(uint16_t &var, const char *const data,
-                           //const int &size, int &pos) {
-    //uint16_t t = 0;
-    //read16BitsRaw(t, data, size, pos);
-    //var = be16toh(t);
-    //return var;
+// bool DnsSeeker::read16Bits(uint16_t &var, const char *const data,
+// const int &size, int &pos) {
+// uint16_t t = 0;
+// read16BitsRaw(t, data, size, pos);
+// var = be16toh(t);
+// return var;
 //}
 
 bool DnsSeeker::read16Bits(uint16_t &var, const char *const data,
                            const int &size, int &pos) {
     uint16_t t = 0;
-    if(!read16BitsRaw(t, data, size, pos))
-        return false;
+    if (!read16BitsRaw(t, data, size, pos)) return false;
     var = be16toh(t);
     return true;
 }
@@ -824,24 +823,25 @@ void DnsSeeker::removeQuery(const uint16_t &id, const bool &withNextDueTime) {
     const Query &query = queryList.at(id);
     if (withNextDueTime) {
         if (queryByNextDueTime.find(query.nextRetry) ==
-            queryByNextDueTime.cend()) {
+            queryByNextDueTime.cend())
             std::cerr << __FILE__ << ":" << __LINE__ << " query " << id
                       << " not found into queryByNextDueTime: "
                       << query.nextRetry << std::endl;
-        }
         queryByNextDueTime.erase(query.nextRetry);
     }
-    if (queryByNextDueTime.find(query.nextRetry) == queryByNextDueTime.cend()) {
-        Log(__FILE__, __LINE__, Log::kError)
-            << "query " << id
-            << " not found into queryListByHost: " << query.host;
-    }
+
+    if (queryListByHost.find(query.host) == queryListByHost.cend())
+        std::cerr << __FILE__ << ":" << __LINE__ << " query " << id
+                  << " not found into queryListByHost: " << query.host
+                  << " into Dns::removeQuery()" << std::endl;
     queryListByHost.erase(query.host);
-    if (queryByNextDueTime.find(query.nextRetry) == queryByNextDueTime.cend()) {
-        Log(__FILE__, __LINE__, Log::kError)
-            << "query " << id << " not found into queryList";
-    }
+
+    if (queryList.find(id) == queryList.cend())
+        std::cerr << __FILE__ << ":" << __LINE__ << " query " << id
+                  << " not found into queryList: " << id
+                  << " into Dns::removeQuery()" << std::endl;
     queryList.erase(id);
+
     if (httpInProgress > 0) httpInProgress--;
 }
 

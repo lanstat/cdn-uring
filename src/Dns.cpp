@@ -17,19 +17,7 @@
 Dns::Dns() {
    ipv4_regex_ =
        std::regex("^(((25[0-5]|(2[0-4]|1\\d|[1-9]|)\\d)\\.?\\b){4})(:\\d+)*$");
-   ipv6_regex_ = std::regex(
-       "^%5B(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:"
-       "|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:["
-       "0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|"
-       "([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,"
-       "2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|"
-       ":((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]"
-       "{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-"
-       "9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:"
-       ")"
-       "{1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-"
-       "4]"
-       "|1{0,1}[0-9]){0,1}[0-9]))%5D(:\\d+)*$");
+   ipv6_regex_ = std::regex("\\[([a-f0-9:]+:+)+[a-f0-9]+\\](:\\d+)*");
 
    LoadHostFile();
 }
@@ -66,7 +54,9 @@ void Dns::AddFetchAAAARequest(struct Request *request, bool isHttps) {
    std::string host((char *)request->iov[2].iov_base);
    host = host.substr(1);
    std::size_t pos = host.find("/");
-   host = host.substr(0, pos);
+   if (pos != std::string::npos) {
+      host = host.substr(0, pos);
+   }
    int port = 80;
    if (isHttps) {
       port = 443;
@@ -122,9 +112,9 @@ void Dns::AddFetchAAAARequest(struct Request *request, bool isHttps) {
    }
 
    if (std::regex_match(host, ipv6_regex_)) {
-      pos = host.find("%5D");
+      pos = host.find("]");
       std::string tmp = host.substr(pos);
-      host = host.substr(3, pos - 3);
+      host = host.substr(1, pos - 1);
       pos = tmp.find(":");
       if (pos != std::string::npos) {
          port = std::stoi(tmp.substr(pos + 1));
